@@ -166,7 +166,19 @@ class AnthropicClient:
         async def _do() -> Any:
             return await self._client.messages.create(**request)
 
-        resp = await with_retry(_do, policy=self._retry)
+        # The retry loop can raise after exhausting attempts; if we don't release
+        # the reservation in that case it leaks for the remainder of the session.
+        try:
+            resp = await with_retry(_do, policy=self._retry)
+        except BaseException:
+            await self._budget.settle(
+                ctx.agent,
+                est_tokens=est_in + est_out,
+                est_usd=est_cost,
+                actual_tokens=0,
+                actual_usd=0.0,
+            )
+            raise
         finished = datetime.now(UTC)
 
         usage = resp.usage
@@ -182,7 +194,6 @@ class AnthropicClient:
             cache_write=cache_write,
         )
 
-        # Settle budget
         await self._budget.settle(
             ctx.agent,
             est_tokens=est_in + est_out,
@@ -257,6 +268,11 @@ def _rough_token_count(spec: AgentCallSpec) -> int:
         n += len(b.text) // 4
     for m in spec.extra_messages:
         n += len(json.dumps(m)) // 4
+    # Tool schemas are sent on every call and can dominate input on tool-heavy
+    # agents (generation, reflection). Skipping them systematically
+    # under-reserves the budget.
+    if spec.tools:
+        n += len(json.dumps(spec.tools)) // 4
     return max(n, 32)
 
 

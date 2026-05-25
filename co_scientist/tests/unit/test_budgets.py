@@ -70,3 +70,27 @@ async def test_share_percent_for_unknown_agent_is_zero() -> None:
     b = TokenBudget(cfg=cfg, budget_tokens=10_000, budget_usd=10.0)
     # 'unknown' has 0% share; only the half-reserve allowance buffers us
     assert b.share_usd("unknown") == 0.0
+
+
+@pytest.mark.asyncio
+async def test_settle_with_zero_actual_releases_reservation() -> None:
+    """If a call fails after admission (e.g. retry exhaustion), the caller must
+    be able to release the reservation with actual=0 so the reserve doesn't leak."""
+    cfg = Config()
+    b = TokenBudget(cfg=cfg, budget_tokens=10_000, budget_usd=1.0)
+
+    await b.admit("generation", est_tokens=500, est_usd=0.20)
+    snap_mid = b.snapshot()
+    assert snap_mid["_global"]["reserved_usd"] == pytest.approx(0.20)
+
+    # Simulate failed call: settle with actual=0
+    await b.settle(
+        "generation",
+        est_tokens=500, est_usd=0.20,
+        actual_tokens=0, actual_usd=0.0,
+    )
+    snap_end = b.snapshot()
+    assert snap_end["_global"]["reserved_usd"] == pytest.approx(0.0)
+    assert snap_end["_global"]["used_usd"] == pytest.approx(0.0)
+    # Subsequent admit should now succeed
+    await b.admit("generation", est_tokens=500, est_usd=0.20)
