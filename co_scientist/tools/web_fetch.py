@@ -9,17 +9,48 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
+import socket
 import time
 from io import BytesIO
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
 from ..config import Config
 from ..ids import url_hash
 from .base import ToolCtx, ToolResult
+
+
+def _is_private_ip(host: str) -> bool:
+    """Return True if `host` resolves to any private / loopback / link-local /
+    reserved IP. Used to block SSRF against the metadata service and intranet
+    targets even when the user-supplied URL passes the scheme check.
+    """
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        # If we can't resolve, be conservative: refuse.
+        return True
+    for info in infos:
+        addr = info[4][0]
+        try:
+            ip = ipaddress.ip_address(addr.split("%")[0])
+        except ValueError:
+            continue
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+        ):
+            return True
+    return False
 
 
 class WebFetchTool:
@@ -53,6 +84,17 @@ class WebFetchTool:
         if not url.startswith(("http://", "https://")):
             return ToolResult(is_error=True, error_message="URL must start with http(s)")
 
+        # SSRF guard. We re-check after each hop via an httpx event_hook so a
+        # redirect can't bounce us to 169.254.169.254 / 127.0.0.1 / RFC1918.
+        host = urlsplit(url).hostname or ""
+        if not host:
+            return ToolResult(is_error=True, error_message="URL has no host")
+        if await asyncio.to_thread(_is_private_ip, host):
+            return ToolResult(
+                is_error=True,
+                error_message="URL resolves to a private/loopback address",
+            )
+
         cached = await self._read_cache(ctx, url)
         if cached is not None:
             cached = self._truncate(cached, max_chars)
@@ -62,49 +104,90 @@ class WebFetchTool:
                 result_bytes=len(json.dumps(cached)),
             )
 
+        max_bytes = self._cfg.web_fetch.max_bytes
+
+        async def _check_redirect(response: httpx.Response) -> None:
+            loc = response.headers.get("location")
+            if not loc:
+                return
+            next_url = httpx.URL(loc) if loc.startswith(("http://", "https://")) else response.url.join(loc)
+            next_host = next_url.host
+            if not next_host or await asyncio.to_thread(_is_private_ip, next_host):
+                raise httpx.RequestError(
+                    "redirect to private/loopback address blocked",
+                    request=response.request,
+                )
+
         try:
-            async with httpx.AsyncClient(
-                timeout=self._cfg.web_fetch.timeout_seconds,
-                follow_redirects=True,
-                max_redirects=5,
-                headers={"User-Agent": self._cfg.web_fetch.user_agent},
-            ) as client:
-                r = await client.get(url)
+            # Stream so we can abort on size-overflow without buffering the
+            # full body in memory.
+            async with (
+                httpx.AsyncClient(
+                    timeout=self._cfg.web_fetch.timeout_seconds,
+                    follow_redirects=True,
+                    max_redirects=5,
+                    headers={"User-Agent": self._cfg.web_fetch.user_agent},
+                    event_hooks={"response": [_check_redirect]},
+                ) as client,
+                client.stream("GET", url) as r,
+            ):
+                if r.status_code >= 400:
+                    return ToolResult(
+                        is_error=True,
+                        error_message=f"HTTP {r.status_code}",
+                        content={"url": url, "status": r.status_code},
+                    )
+                # Reject upfront if server advertises a too-large body.
+                cl = r.headers.get("content-length")
+                if cl is not None:
+                    try:
+                        if int(cl) > max_bytes:
+                            return ToolResult(
+                                is_error=True,
+                                error_message=f"response too large ({cl} bytes advertised)",
+                            )
+                    except ValueError:
+                        pass
+
+                chunks: list[bytes] = []
+                total = 0
+                async for chunk in r.aiter_bytes():
+                    total += len(chunk)
+                    if total > max_bytes:
+                        return ToolResult(
+                            is_error=True,
+                            error_message=f"response too large (>{max_bytes} bytes, stopped streaming)",
+                        )
+                    chunks.append(chunk)
+                body = b"".join(chunks)
+                final_url = str(r.url)
+                status = r.status_code
+                headers = r.headers
         except httpx.HTTPError as e:
             return ToolResult(is_error=True, error_message=f"fetch failed: {e}")
 
-        if r.status_code >= 400:
-            return ToolResult(
-                is_error=True,
-                error_message=f"HTTP {r.status_code}",
-                content={"url": url, "status": r.status_code},
-            )
-        if len(r.content) > self._cfg.web_fetch.max_bytes:
-            return ToolResult(
-                is_error=True,
-                error_message=f"response too large ({len(r.content)} bytes)",
-            )
-
-        ct = (r.headers.get("Content-Type") or "").lower()
+        ct = (headers.get("Content-Type") or "").lower()
         is_pdf = "application/pdf" in ct or url.lower().endswith(".pdf")
         try:
             if is_pdf:
-                text = await asyncio.to_thread(_extract_pdf, r.content)
+                text = await asyncio.to_thread(_extract_pdf, body)
                 title: str | None = None
             else:
-                text, title = await asyncio.to_thread(_extract_html, r.text, url)
+                text, title = await asyncio.to_thread(
+                    _extract_html, body.decode("utf-8", errors="replace"), url
+                )
         except Exception as e:
             return ToolResult(
                 is_error=True, error_message=f"extraction failed: {e}"
             )
 
         payload: dict[str, Any] = {
-            "url": str(r.url),
+            "url": final_url,
             "title": title,
             "text": text,
             "content_type": ct,
-            "status": r.status_code,
-            "bytes": len(r.content),
+            "status": status,
+            "bytes": total,
         }
         await self._write_cache(ctx, url, payload)
         payload = self._truncate(payload, max_chars)

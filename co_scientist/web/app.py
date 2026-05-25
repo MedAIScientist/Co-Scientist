@@ -19,7 +19,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import markdown as md
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -38,6 +37,7 @@ from ..storage.repos import hypotheses as hyp_repo
 from ..storage.repos import reviews as rev_repo
 from ..storage.repos import sessions as sess_repo
 from ..storage.repos import transcripts as tx_repo
+from .sanitize import render_markdown
 
 log = get_logger("web")
 HERE = Path(__file__).parent
@@ -140,7 +140,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
                     "session": session,
                     "h": h,
                     "reviews": reviews,
-                    "full_text_html": md.markdown(h.full_text or ""),
+                    "full_text_html": render_markdown(h.full_text or ""),
                 },
             )
         finally:
@@ -155,14 +155,26 @@ def create_app(cfg: Config | None = None) -> FastAPI:
                 raise HTTPException(
                     status_code=404, detail="no final overview yet for this session"
                 )
-            path = cfg.data_dir / session.final_overview
+            # `final_overview` is written by the supervisor under
+            # `data_dir/artifacts/...` but is stored as a string in the DB.
+            # Resolve and confirm the path is still inside `data_dir` so a
+            # tampered row can't read arbitrary files.
+            base = cfg.data_dir.resolve()
+            try:
+                path = (cfg.data_dir / session.final_overview).resolve()
+                path.relative_to(base)
+            except (ValueError, OSError) as e:
+                log.error("overview_path_escape", session=session_id, err=str(e))
+                raise HTTPException(status_code=404, detail="overview unavailable") from e
+            if not path.is_file():
+                raise HTTPException(status_code=404, detail="overview missing on disk")
             overview_md = path.read_text()
             return TEMPLATES.TemplateResponse(
                 request,
                 "overview.html",
                 {
                     "session": session,
-                    "overview_html": md.markdown(overview_md),
+                    "overview_html": render_markdown(overview_md),
                     "overview_md": overview_md,
                 },
             )
