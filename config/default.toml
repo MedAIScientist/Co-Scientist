@@ -131,6 +131,32 @@ enable_citation_verifier = true
 classifier_block_categories = ["cbrn", "csam", "weapons", "illicit_synthesis"]
 classifier_warn_categories = ["dual_use_bio"]
 
+# LLM provider selection. Choose one of:
+#   "anthropic"          — Claude via the official SDK (default).
+#                          Cache breakpoints, extended thinking, batch API.
+#   "openai"             — OpenAI Chat Completions (api.openai.com).
+#                          Reasoning translated to `reasoning_effort` on
+#                          o-series models. No cache breakpoints, no batch.
+#   "openai_compatible"  — Any OpenAI-compatible endpoint; set
+#                          `llm.openai.base_url` to point at it. Works with
+#                          Groq, Together, OpenRouter, Mistral, Gemini's
+#                          OpenAI-compat endpoint, local Ollama / vLLM, etc.
+#
+# Pick a `[models]` section that names models your provider can serve.
+[llm]
+provider = "anthropic"
+
+# Examples:
+#   provider = "openai"
+#   [llm.openai] base_url = ""                                  # default OpenAI
+#   provider = "openai_compatible"
+#   [llm.openai] base_url = "https://api.groq.com/openai/v1"    # Groq
+#   [llm.openai] base_url = "https://openrouter.ai/api/v1"      # OpenRouter
+#   [llm.openai] base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"  # Gemini
+#   [llm.openai] base_url = "http://localhost:11434/v1"         # Ollama
+[llm.openai]
+# base_url = ""
+
 [web_ui]
 host = "127.0.0.1"
 port = 7878

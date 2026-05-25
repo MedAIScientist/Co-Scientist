@@ -13,8 +13,9 @@ authors = [{ name = "Co-Scientist contributors" }]
 keywords = ["ai", "agents", "research", "anthropic", "claude"]
 
 dependencies = [
-    # LLM client
+    # LLM clients (provider is selectable via [llm] provider = ...)
     "anthropic>=0.40.0",
+    "openai>=1.40.0",
     # Async stack
     "aiosqlite>=0.20.0",
     "httpx>=0.27.0",
@@ -53,7 +54,10 @@ dev = [
     "ruff>=0.6.0",
     "mypy>=1.11.0",
 ]
-openai = ["openai>=1.40.0"]   # embeddings fallback
+# `openai` extra retained for compatibility with older configs; the SDK is
+# now in the default dependency set so the OpenAI provider works out of the
+# box.
+openai = ["openai>=1.40.0"]
 
 [project.scripts]
 co-scientist = "co_scientist.cli:app"

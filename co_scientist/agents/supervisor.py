@@ -28,12 +28,12 @@ from .. import ids
 from ..config import Config
 from ..llm.anthropic_client import (
     AgentCallSpec,
-    AnthropicClient,
     CachedBlock,
     CallContext,
 )
 from ..llm.budgets import TokenBudget
 from ..llm.prompts import render
+from ..llm.provider import get_provider
 from ..llm.routing import route
 from ..logging import bind, get_logger
 from ..models import ResearchPlan, Session, Task
@@ -99,7 +99,7 @@ class Supervisor:
                     budget_tokens=session.budget_tokens,
                     budget_usd=session.budget_usd,
                 )
-                llm = AnthropicClient(self.cfg, db=conn, budget=budget)
+                llm = get_provider(self.cfg, db=conn, budget=budget)
                 tools = ToolRegistry(self.cfg).discover()
                 deps = AgentDeps(cfg=self.cfg, db=conn, llm=llm, tools=tools)
 
@@ -134,7 +134,7 @@ class Supervisor:
                     budget_tokens=session.budget_tokens,
                     budget_usd=session.budget_usd,
                 )
-                llm = AnthropicClient(self.cfg, db=conn, budget=budget)
+                llm = get_provider(self.cfg, db=conn, budget=budget)
                 tools = ToolRegistry(self.cfg).discover()
                 deps = AgentDeps(cfg=self.cfg, db=conn, llm=llm, tools=tools)
 

@@ -10,11 +10,10 @@ as the agent under test, to reduce echo-judge bias.
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 from typing import Any
-
-from anthropic import AsyncAnthropic
 
 from ..config import Config
 
@@ -71,13 +70,10 @@ async def judge(
 ) -> dict[str, Any]:
     """Issue one judge call. Returns {scores: [...], weighted: float}.
 
-    No retries here — the eval runner aggregates over many fixtures, so a single
-    flaky judgment is noise we accept.
+    Routes through whichever LLM provider is configured in `cfg.llm.provider`.
+    No retries here — the eval runner aggregates over many fixtures, so a
+    single flaky judgment is noise we accept.
     """
-    api_key = cfg.secrets.ANTHROPIC_API_KEY or os.environ.get("ANTHROPIC_API_KEY") or ""
-    if not api_key:
-        return {"scores": [], "weighted": 0.0, "notes": "no ANTHROPIC_API_KEY"}
-
     rubric_text = "\n".join(
         f"- {c.name} (weight {c.weight}): {c.guidance}" for c in rubric
     )
@@ -92,6 +88,21 @@ async def judge(
         f"<CANDIDATE>\n{candidate[:12_000]}\n</CANDIDATE>\n\n"
         f"Rubric:\n{rubric_text}"
     )
+
+    provider = (cfg.llm.provider or "anthropic").lower()
+    if provider == "anthropic":
+        return await _judge_anthropic(cfg, system=system, user=user, rubric=rubric)
+    return await _judge_openai(cfg, system=system, user=user, rubric=rubric)
+
+
+async def _judge_anthropic(
+    cfg: Config, *, system: str, user: str, rubric: list[RubricCriterion]
+) -> dict[str, Any]:
+    api_key = cfg.secrets.ANTHROPIC_API_KEY or os.environ.get("ANTHROPIC_API_KEY") or ""
+    if not api_key:
+        return {"scores": [], "weighted": 0.0, "notes": "no ANTHROPIC_API_KEY"}
+    from anthropic import AsyncAnthropic
+
     client = AsyncAnthropic(api_key=api_key)
     resp = await client.messages.create(
         model=cfg.models.judge,
@@ -112,6 +123,61 @@ async def judge(
                     "notes": inp.get("overall_notes", ""),
                 }
     return {"scores": [], "weighted": 0.0, "notes": "no tool_use in response"}
+
+
+async def _judge_openai(
+    cfg: Config, *, system: str, user: str, rubric: list[RubricCriterion]
+) -> dict[str, Any]:
+    api_key = cfg.secrets.OPENAI_API_KEY or os.environ.get("OPENAI_API_KEY") or ""
+    base_url = cfg.llm.openai.base_url or os.environ.get("OPENAI_BASE_URL")
+    if not api_key and not base_url:
+        return {"scores": [], "weighted": 0.0, "notes": "no OPENAI_API_KEY"}
+    if not api_key:
+        api_key = "compat-no-key"
+    try:
+        from openai import AsyncOpenAI
+    except ImportError:
+        return {"scores": [], "weighted": 0.0, "notes": "openai SDK not installed"}
+
+    kwargs: dict[str, Any] = {"api_key": api_key}
+    if base_url:
+        kwargs["base_url"] = base_url
+    client = AsyncOpenAI(**kwargs)
+    resp = await client.chat.completions.create(
+        model=cfg.models.judge,
+        messages=[
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        max_tokens=1024,
+        tools=[{
+            "type": "function",
+            "function": {
+                "name": JUDGE_TOOL["name"],
+                "description": JUDGE_TOOL["description"],
+                "parameters": JUDGE_TOOL["input_schema"],
+            },
+        }],
+        tool_choice={"type": "function", "function": {"name": JUDGE_TOOL["name"]}},
+    )
+    if not resp.choices:
+        return {"scores": [], "weighted": 0.0, "notes": "empty response"}
+    msg = resp.choices[0].message
+    for tc in (msg.tool_calls or []):
+        fn = getattr(tc, "function", None)
+        if fn and getattr(fn, "name", "") == JUDGE_TOOL["name"]:
+            try:
+                inp = json.loads(getattr(fn, "arguments", "{}"))
+            except json.JSONDecodeError:
+                continue
+            if isinstance(inp, dict):
+                scores = inp.get("scores", [])
+                return {
+                    "scores": scores,
+                    "weighted": weighted_total(rubric, scores),
+                    "notes": inp.get("overall_notes", ""),
+                }
+    return {"scores": [], "weighted": 0.0, "notes": "no tool_call in response"}
 
 
 # Pre-built rubrics for the four agents that have measurable outputs.

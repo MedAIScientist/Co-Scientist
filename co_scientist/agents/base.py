@@ -8,7 +8,7 @@ from typing import Any
 import aiosqlite
 
 from ..config import Config
-from ..llm.anthropic_client import AnthropicClient
+from ..llm.provider import LLMProvider
 from ..models import Task, TaskResult
 from ..safety.quoting import SAFETY_PREAMBLE
 from ..tools.registry import ToolRegistry
@@ -20,7 +20,7 @@ class AgentDeps:
 
     cfg: Config
     db: aiosqlite.Connection
-    llm: AnthropicClient
+    llm: LLMProvider
     tools: ToolRegistry
 
 

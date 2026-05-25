@@ -11,13 +11,34 @@ from dataclasses import dataclass
 from ..config import Config
 
 # USD per 1M tokens. Cache writes are ~1.25x input; cache reads are ~0.1x input.
-# These are placeholders the user should sanity-check against current Anthropic
-# pricing before any production use.
+# These are placeholders the user should sanity-check against current vendor
+# pricing before any production use. Unknown models fall back to a
+# conservative sonnet-class default.
 PRICE_TABLE: dict[str, dict[str, float]] = {
-    "claude-opus-4-7":          {"input": 15.0,  "output": 75.0,  "cache_write": 18.75, "cache_read": 1.5},
-    "claude-sonnet-4-6":        {"input":  3.0,  "output": 15.0,  "cache_write":  3.75, "cache_read": 0.3},
-    "claude-haiku-4-5-20251001":{"input":  1.0,  "output":  5.0,  "cache_write":  1.25, "cache_read": 0.1},
+    # Anthropic
+    "claude-opus-4-7":            {"input": 15.0,  "output": 75.0,  "cache_write": 18.75, "cache_read": 1.5},
+    "claude-sonnet-4-6":          {"input":  3.0,  "output": 15.0,  "cache_write":  3.75, "cache_read": 0.3},
+    "claude-haiku-4-5-20251001":  {"input":  1.0,  "output":  5.0,  "cache_write":  1.25, "cache_read": 0.1},
+    # OpenAI (approximate; verify on platform.openai.com/docs/pricing)
+    "gpt-5":                      {"input":  5.0,  "output": 20.0,  "cache_write":  5.0,  "cache_read": 0.5},
+    "gpt-4.1":                    {"input":  2.0,  "output":  8.0,  "cache_write":  2.0,  "cache_read": 0.2},
+    "gpt-4o":                     {"input":  2.5,  "output": 10.0,  "cache_write":  2.5,  "cache_read": 0.25},
+    "gpt-4o-mini":                {"input":  0.15, "output":  0.6,  "cache_write":  0.15, "cache_read": 0.075},
+    "o3":                         {"input":  2.0,  "output":  8.0,  "cache_write":  2.0,  "cache_read": 0.5},
+    "o3-mini":                    {"input":  1.1,  "output":  4.4,  "cache_write":  1.1,  "cache_read": 0.55},
+    "o1":                         {"input": 15.0,  "output": 60.0,  "cache_write": 15.0,  "cache_read": 7.5},
+    "o1-mini":                    {"input":  3.0,  "output": 12.0,  "cache_write":  3.0,  "cache_read": 1.5},
+    # Google (via OpenAI-compat endpoint)
+    "gemini-2.5-pro":             {"input":  1.25, "output": 10.0,  "cache_write":  1.25, "cache_read": 0.3},
+    "gemini-2.5-flash":           {"input":  0.3,  "output":  2.5,  "cache_write":  0.3,  "cache_read": 0.075},
+    # Mistral, Meta (via providers)
+    "mistral-large-latest":       {"input":  2.0,  "output":  6.0,  "cache_write":  2.0,  "cache_read": 0.2},
+    "llama-3.3-70b":              {"input":  0.6,  "output":  0.6,  "cache_write":  0.6,  "cache_read": 0.6},
 }
+
+# Conservative fallback for any model name not in the table — we'd rather
+# over-estimate cost than free-run a misconfigured route.
+_FALLBACK_PRICE = {"input": 3.0, "output": 15.0, "cache_write": 3.75, "cache_read": 0.3}
 
 
 # Soft fallback chain: if a degraded route is requested, walk this list once.
@@ -109,11 +130,9 @@ def estimate_cost_usd(
 
     Anthropic's `usage.input_tokens` is the uncached input count — cache_read /
     cache_write are reported separately. So all four buckets are summed
-    independently; no subtraction.
+    independently; no subtraction. Unknown models use a conservative fallback.
     """
-    p = PRICE_TABLE.get(model)
-    if p is None:
-        p = PRICE_TABLE["claude-sonnet-4-6"]
+    p = PRICE_TABLE.get(model) or _FALLBACK_PRICE
     return (
         input_tokens * p["input"]
         + output_tokens * p["output"]

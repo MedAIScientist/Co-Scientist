@@ -164,6 +164,44 @@ class SafetyCfg(BaseModel):
     classifier_warn_categories: list[str] = Field(default_factory=lambda: ["dual_use_bio"])
 
 
+class OpenAIProviderCfg(BaseModel):
+    """OpenAI / OpenAI-compatible endpoint settings.
+
+    `base_url` overrides the SDK default. Use it to point at any
+    OpenAI-compatible provider (Groq, Together, OpenRouter, Mistral,
+    Gemini OpenAI-compat, Ollama local, vLLM, ...).
+    """
+
+    base_url: str | None = None
+
+
+class AnthropicProviderCfg(BaseModel):
+    """Anthropic provider settings. `base_url` is rarely used; honored if set."""
+
+    base_url: str | None = None
+
+
+class LLMCfg(BaseModel):
+    """Choose which LLM vendor backs the agents.
+
+    Supported values:
+    - "anthropic" — Claude via the official Anthropic SDK (default). Cache
+      breakpoints, extended thinking, and the Batch API are only available
+      under this provider.
+    - "openai" — OpenAI Chat Completions. Extended reasoning is translated
+      to `reasoning_effort` for the o-series models; cache breakpoints are
+      stripped.
+    - "openai_compatible" — same client as `openai` but allows
+      `llm.openai.base_url` to point at any OpenAI-compatible endpoint
+      (Groq, Together, OpenRouter, Mistral via le-plateforme, Google
+      Gemini's OpenAI-compat endpoint, local Ollama / vLLM, …).
+    """
+
+    provider: str = "anthropic"
+    openai: OpenAIProviderCfg = Field(default_factory=OpenAIProviderCfg)
+    anthropic: AnthropicProviderCfg = Field(default_factory=AnthropicProviderCfg)
+
+
 class WebUICfg(BaseModel):
     host: str = "127.0.0.1"
     port: int = 7878
@@ -201,6 +239,7 @@ class Config(BaseModel):
     web_fetch: WebFetchCfg = Field(default_factory=WebFetchCfg)
     code_exec: CodeExecCfg = Field(default_factory=CodeExecCfg)
     safety: SafetyCfg = Field(default_factory=SafetyCfg)
+    llm: LLMCfg = Field(default_factory=LLMCfg)
     web_ui: WebUICfg = Field(default_factory=WebUICfg)
     secrets: Secrets = Field(default_factory=Secrets)
 

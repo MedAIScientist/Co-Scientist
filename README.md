@@ -39,8 +39,57 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 
 cp .env.example .env
-# fill in ANTHROPIC_API_KEY at minimum
+# fill in ANTHROPIC_API_KEY (default provider) or OPENAI_API_KEY,
+# depending on which LLM vendor you select below.
 ```
+
+## LLM provider
+
+The agents talk to one LLM provider per session, configured in
+[`config/default.toml`](config/default.toml) (override with your own
+`co-scientist.toml`):
+
+```toml
+[llm]
+provider = "anthropic"   # anthropic | openai | openai_compatible
+```
+
+| provider              | Endpoint                                                       | Required key                                           |
+| --------------------- | -------------------------------------------------------------- | ------------------------------------------------------ |
+| `anthropic` *(default)* | api.anthropic.com — Claude                                   | `ANTHROPIC_API_KEY`                                    |
+| `openai`              | api.openai.com — GPT-5, GPT-4.1, o-series                      | `OPENAI_API_KEY`                                       |
+| `openai_compatible`   | Any OpenAI-compatible endpoint via `[llm.openai] base_url`     | `OPENAI_API_KEY` (or any non-empty string for keyless local servers) |
+
+`openai_compatible` covers Groq, Together, OpenRouter, Mistral
+*la plateforme*, Google Gemini's OpenAI-compat endpoint, local Ollama, vLLM,
+LM Studio, and anything else that speaks the OpenAI Chat Completions API.
+Example:
+
+```toml
+[llm]
+provider = "openai_compatible"
+[llm.openai]
+base_url = "https://api.groq.com/openai/v1"
+
+[models]
+generation = "llama-3.3-70b-versatile"
+reflection = "llama-3.3-70b-versatile"
+# ...
+```
+
+After selecting a provider, set each entry in `[models]` to a model id your
+provider can serve. Cost is estimated via `co_scientist/llm/routing.py`'s
+`PRICE_TABLE`; unknown models fall back to a sonnet-class default — edit the
+table or set tighter `[run] budget_usd` if running on a new model.
+
+**Provider feature support:**
+
+| Feature              | anthropic | openai (o-series) | openai (gpt) | openai_compatible |
+| -------------------- | --------- | ----------------- | ------------ | ----------------- |
+| Tool / function call | ✅        | ✅                | ✅           | depends on endpoint |
+| Extended reasoning   | ✅ (thinking) | ✅ (`reasoning_effort`) | ❌ (dropped) | endpoint-specific |
+| Prompt-cache breakpoints | ✅    | ❌                | ❌           | ❌                |
+| Batch API (50%-off ranking) | ✅ | ❌            | ❌           | ❌                |
 
 ## Initialize
 
