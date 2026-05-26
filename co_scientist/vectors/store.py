@@ -28,6 +28,7 @@ class FaissStore:
         self._index_path = self._dir / "index.faiss"
         self._meta_path = self._dir / "index.meta.json"
         self._ordered_ids: list[str] = []   # hypothesis_id at each faiss offset
+        self._offset_by_id: dict[str, int] = {}  # mirror of _ordered_ids for O(1) offset_of()
         # FAISS itself is not thread-safe. Even though our `to_thread` calls
         # serialize on the asyncio loop, they spawn into the default thread
         # pool — multiple coroutines calling `add` / `search` / `save`
@@ -47,6 +48,7 @@ class FaissStore:
             return faiss.IndexFlatIP(self.dim), []
 
         self.index, self._ordered_ids = await asyncio.to_thread(_do)
+        self._offset_by_id = {hid: i for i, hid in enumerate(self._ordered_ids)}
 
     async def save(self) -> None:
         assert self.index is not None
@@ -89,6 +91,7 @@ class FaissStore:
         async with self._lock:
             offset = await asyncio.to_thread(_do)
             self._ordered_ids.append(hypothesis_id)
+            self._offset_by_id[hypothesis_id] = offset
         return offset
 
     async def search(
@@ -133,10 +136,7 @@ class FaissStore:
             return await asyncio.to_thread(_do)
 
     def offset_of(self, hypothesis_id: str) -> int | None:
-        try:
-            return self._ordered_ids.index(hypothesis_id)
-        except ValueError:
-            return None
+        return self._offset_by_id.get(hypothesis_id)
 
     def hypothesis_at(self, offset: int) -> str | None:
         if 0 <= offset < len(self._ordered_ids):

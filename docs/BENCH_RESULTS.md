@@ -95,10 +95,10 @@ In `frontier-aml-vs-raw` **all 4 pipeline modes failed** (claude-opus-4.7 burned
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `flash25` | pipeline | 0 | — | — | 0/— | $0.0004 | — |  |
-| `flash3` | pipeline | 0 | — | — | 0/— | $0.0006 | — |  |
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `flash25` | pipeline | 0 | — | — | 0/— | $0.0004 | — | — |  |
+| `flash3` | pipeline | 0 | — | — | 0/— | $0.0006 | — | — |  |
 
 _No hypotheses produced (every candidate failed)._
 
@@ -119,7 +119,8 @@ _No hypotheses produced (every candidate failed)._
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSG616HEJDMHFVVJGPRZGAB6';
 
@@ -151,10 +152,10 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `flash25` | pipeline | 1 | — | 1200 | 0/— | $0.0056 | 12.4s |  |
-| `flash3` | pipeline | 1 | — | 1200 | 0/— | $0.0083 | 12.7s |  |
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `flash25` | pipeline | 1 | — | 1200 | 0/— | $0.0056 | 4,138 / 1,753 | 12.4s |  |
+| `flash3` | pipeline | 1 | — | 1200 | 0/— | $0.0083 | 18,633 / 1,097 | 12.7s |  |
 
 ### Hypotheses surfaced (2 total)
 
@@ -182,7 +183,8 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSG6415G35N653G91G8B9P8Z';
 
@@ -214,10 +216,10 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `flash3` | pipeline | 1 | — | 1200 | 0/— | $0.0097 | 12.1s |  |
-| `flash25` | pipeline | 0 | — | — | 0/— | $0.0008 | — |  |
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `flash3` | pipeline | 1 | — | 1200 | 0/— | $0.0097 | 23,632 / 1,051 | 12.1s |  |
+| `flash25` | pipeline | 0 | — | — | 0/— | $0.0008 | 2,192 / 65 | — |  |
 
 ### Hypotheses surfaced (1 total)
 
@@ -242,7 +244,8 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSG693N61YY9CSAKK86VFEVR';
 
@@ -274,10 +277,10 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `flash3` | pipeline | 1 | — | 1200 | 0/— | $0.0103 | 25.1s |  |
-| `pro25` | pipeline | 1 | — | 1200 | 0/— | $0.0225 | 17.9s |  |
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `flash3` | pipeline | 1 | — | 1200 | 0/— | $0.0103 | 26,848 / 905 | 25.1s |  |
+| `pro25` | pipeline | 1 | — | 1200 | 0/— | $0.0225 | 3,908 / 1,757 | 17.9s |  |
 
 ### Hypotheses surfaced (2 total)
 
@@ -305,7 +308,8 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSG6A6JW4DZ95NDJPK9561JQ';
 
@@ -337,10 +341,10 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `flash3` | pipeline | 1 | — | 1200 | 0/— | $0.0061 | 11.4s |  |
-| `flash25` | pipeline | 0 | — | — | 0/— | $0.0008 | — |  |
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `flash3` | pipeline | 1 | — | 1200 | 0/— | $0.0061 | 10,710 / 1,149 | 11.4s |  |
+| `flash25` | pipeline | 0 | — | — | 0/— | $0.0008 | 2,192 / 64 | — |  |
 
 ### Hypotheses surfaced (1 total)
 
@@ -365,7 +369,8 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSG6BYTB7KK8NDFJDAJHT3J9';
 
@@ -397,10 +402,10 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `flash3` | pipeline | 1 | 2-0 | 1231 | 0/— | $0.0091 | 10.7s |  |
-| `flash25` | pipeline | 1 | 0-2 | 1169 | 0/— | $0.0108 | 21.2s |  |
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `flash3` | pipeline | 1 | 2-0 | 1231 | 0/— | $0.0091 | 20,108 / 1,214 | 10.7s |  |
+| `flash25` | pipeline | 1 | 0-2 | 1169 | 0/— | $0.0108 | 13,090 / 2,759 | 21.2s |  |
 
 ### Hypotheses surfaced (2 total)
 
@@ -428,7 +433,8 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSG6FCQPP5T4K5V0PW402DPE';
 
@@ -460,11 +466,11 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `flash3` | pipeline | 1 | 3-1 | 1232 | 0/— | $0.0090 | 9.8s |  |
-| `flash25` | pipeline | 1 | 3-1 | 1227 | 0/— | $0.0098 | 16.7s |  |
-| `gpt4o-mini` | pipeline | 1 | 0-4 | 1142 | 0/— | $0.0050 | 19.1s |  |
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `flash3` | pipeline | 1 | 3-1 | 1232 | 0/— | $0.0090 | 20,512 / 1,123 | 9.8s |  |
+| `flash25` | pipeline | 1 | 3-1 | 1227 | 0/— | $0.0098 | 8,906 / 2,865 | 16.7s |  |
+| `gpt4o-mini` | pipeline | 1 | 0-4 | 1142 | 0/— | $0.0050 | 29,999 / 869 | 19.1s |  |
 
 ### Hypotheses surfaced (3 total)
 
@@ -495,7 +501,8 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSG6GM23ERB68V6BCF9XBS2B';
 
@@ -527,12 +534,12 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `claude-haiku-4.5` | pipeline | 1 | — | 1200 | 0/— | $0.2068 | 81.5s |  |
-| `gemini-2-flash-thinking` | pipeline | 1 | — | 1200 | 0/— | $0.0121 | 27.3s |  |
-| `gemini-2-pro` | pipeline | 1 | — | 1200 | 0/— | $0.0471 | 40.9s |  |
-| `openai-o1` | pipeline | 0 | — | — | 0/— | $0.0000 | — |  |
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `claude-haiku-4.5` | pipeline | 1 | — | 1200 | 0/— | $0.2068 | 183,841 / 4,584 | 81.5s |  |
+| `gemini-2-flash-thinking` | pipeline | 1 | — | 1200 | 0/— | $0.0121 | 27,160 / 1,568 | 27.3s |  |
+| `gemini-2-pro` | pipeline | 1 | — | 1200 | 0/— | $0.0471 | 5,473 / 4,028 | 40.9s |  |
+| `openai-o1` | pipeline | 0 | — | — | 0/— | $0.0000 | — | — |  |
 
 ### Hypotheses surfaced (3 total)
 
@@ -563,7 +570,8 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSG7AGXVXBV5XSZQ3G7NAFQ9';
 
@@ -595,12 +603,12 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `gemini-2-flash-thinking` | pipeline | 1 | 6-0 | 1284 | 0/— | $0.0026 | 35.2s |  |
-| `gemini-2-pro` | pipeline | 1 | 4-2 | 1229 | 0/— | $0.0342 | 26.6s |  |
-| `openai-o1` | pipeline | 1 | 2-4 | 1165 | 0/— | $0.2326 | 28.7s |  |
-| `claude-haiku-4.5` | pipeline | 1 | 0-6 | 1123 | 0/— | $0.1338 | 71.3s |  |
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `gemini-2-flash-thinking` | pipeline | 1 | 6-0 | 1284 | 0/— | $0.0026 | 21,971 / 965 | 35.2s |  |
+| `gemini-2-pro` | pipeline | 1 | 4-2 | 1229 | 0/— | $0.0342 | 5,783 / 2,695 | 26.6s |  |
+| `openai-o1` | pipeline | 1 | 2-4 | 1165 | 0/— | $0.2326 | 3,522 / 2,996 | 28.7s |  |
+| `claude-haiku-4.5` | pipeline | 1 | 0-6 | 1123 | 0/— | $0.1338 | 116,434 / 3,477 | 71.3s |  |
 
 ### Hypotheses surfaced (4 total)
 
@@ -634,7 +642,8 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSG7HM47116412H3NV3VKDF8';
 
@@ -666,10 +675,10 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `flash3-pipe` | pipeline | 1 | — | 1200 | 0/— | $0.0164 | 12.5s |  |
-| `flash3-raw` | pipeline | 1 | — | 1200 | 0/— | $0.0208 | 14.3s |  |
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `flash3-pipe` | pipeline | 1 | — | 1200 | 0/— | $0.0164 | 43,383 / 1,341 | 12.5s |  |
+| `flash3-raw` | pipeline | 1 | — | 1200 | 0/— | $0.0208 | 57,868 / 1,394 | 14.3s |  |
 
 ### Hypotheses surfaced (2 total)
 
@@ -697,7 +706,8 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSGCEWXMS7T3M3FJSA9G1K5T';
 
@@ -729,13 +739,13 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `flash25-raw` | direct | 0 | — | — | 0/— | $0.0000 | — | 1 validation error for Task
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `flash25-raw` | direct | 0 | — | — | 0/— | $0.0000 | — | — | 1 validation error for Task
 action
   Input should be 'Create |
-| `flash3-pipe` | pipeline | 0 | — | — | 0/— | $0.0099 | — |  |
-| `flash3-raw` | direct | 0 | — | — | 0/— | $0.0000 | — | 1 validation error for Task
+| `flash3-pipe` | pipeline | 0 | — | — | 0/— | $0.0099 | 31,406 / 202 | — |  |
+| `flash3-raw` | direct | 0 | — | — | 0/— | $0.0000 | — | — | 1 validation error for Task
 action
   Input should be 'Create |
 
@@ -758,7 +768,8 @@ _No hypotheses produced (every candidate failed)._
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSGCHAN1348M7WEDX9E449ND';
 
@@ -790,10 +801,10 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `flash3-pipe` | pipeline | 1 | 2-0 | 1231 | 0/— | $0.0174 | 12.9s |  |
-| `flash3-raw` | direct | 1 | 0-2 | 1169 | 0/— | $0.0015 | 4.2s |  |
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `flash3-pipe` | pipeline | 1 | 2-0 | 1231 | 0/— | $0.0174 | 49,617 / 1,014 | 12.9s |  |
+| `flash3-raw` | direct | 1 | 0-2 | 1169 | 0/— | $0.0015 | 389 / 544 | 4.2s |  |
 
 ### Hypotheses surfaced (2 total)
 
@@ -821,7 +832,8 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSGCJSN8MGMK6H3KZVVQZJPG';
 
@@ -853,12 +865,12 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `claude-haiku-4.5` | pipeline | 2 | 3-0 | 1224 | 0/5 | $0.3922 | 54.1s |  |
-| `openai-o1` | pipeline | 2 | 2-1 | 1208 | 0/5 | $0.5341 | 19.3s |  |
-| `gemini-2-pro` | pipeline | 2 | 1-2 | 1192 | 0/5 | $0.0540 | 29.1s |  |
-| `gemini-2-flash-thinking` | pipeline | 2 | 0-3 | 1176 | 0/5 | $0.0049 | 10.6s |  |
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `claude-haiku-4.5` | pipeline | 2 | 3-0 | 1224 | 0/5 | $0.3922 | 350,189 / 8,402 | 54.1s |  |
+| `openai-o1` | pipeline | 2 | 2-1 | 1208 | 0/5 | $0.5341 | 10,441 / 6,291 | 19.3s |  |
+| `gemini-2-pro` | pipeline | 2 | 1-2 | 1192 | 0/5 | $0.0540 | 15,522 / 3,457 | 29.1s |  |
+| `gemini-2-flash-thinking` | pipeline | 2 | 0-3 | 1176 | 0/5 | $0.0049 | 41,386 / 2,001 | 10.6s |  |
 
 ### Hypotheses surfaced (8 total)
 
@@ -904,7 +916,8 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSGCKSG3MJKVPDZBZXM3TH2G';
 
@@ -936,16 +949,16 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `claude-opus-4.7[raw]` | direct | 1 | 1-0 | 1216 | 0/5 | $0.1716 | 31.1s |  |
-| `gemini-3-flash[raw]` | direct | 1 | 0-1 | 1184 | 0/5 | $0.0017 | 7.7s |  |
-| `claude-opus-4.7[pipe]` | pipeline | 0 | — | — | 0/5 | $0.1427 | — |  |
-| `gemini-3-flash[pipe]` | pipeline | 0 | — | — | 0/5 | $0.0105 | — |  |
-| `gemini-3-pro[pipe]` | pipeline | 0 | — | — | 0/5 | $0.0567 | — |  |
-| `gemini-3-pro[raw]` | direct | 0 | — | — | 0/5 | $0.0178 | 41.0s |  |
-| `gpt-5[pipe]` | pipeline | 0 | — | — | 0/5 | $0.2125 | — |  |
-| `gpt-5[raw]` | direct | 0 | — | — | 0/5 | $0.0842 | 108.7s |  |
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `claude-opus-4.7[raw]` | direct | 1 | 1-0 | 1216 | 0/5 | $0.1716 | 1,792 / 1,930 | 31.1s |  |
+| `gemini-3-flash[raw]` | direct | 1 | 0-1 | 1184 | 0/5 | $0.0017 | 426 / 609 | 7.7s |  |
+| `claude-opus-4.7[pipe]` | pipeline | 0 | — | — | 0/5 | $0.1427 | 7,294 / 444 | — |  |
+| `gemini-3-flash[pipe]` | pipeline | 0 | — | — | 0/5 | $0.0105 | 33,101 / 216 | — |  |
+| `gemini-3-pro[pipe]` | pipeline | 0 | — | — | 0/5 | $0.0567 | 49,795 / 435 | — |  |
+| `gemini-3-pro[raw]` | direct | 0 | — | — | 0/5 | $0.0178 | 426 / 3,932 | 41.0s |  |
+| `gpt-5[pipe]` | pipeline | 0 | — | — | 0/5 | $0.2125 | 24,631 / 4,468 | — |  |
+| `gpt-5[raw]` | direct | 0 | — | — | 0/5 | $0.0842 | 463 / 4,096 | 108.7s |  |
 
 ### Hypotheses surfaced (2 total)
 
@@ -973,7 +986,8 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSGCTX88HHP929V9AE1CGQRV';
 
@@ -1005,12 +1019,12 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `flash3-pipe` | pipeline | 1 | 4-2 | 1234 | 0/— | $0.0275 | 14.9s |  |
-| `flash3-raw` | direct | 2 | 5-1 | 1228 | 0/— | $0.0033 | 5.0s |  |
-| `gpt4o-pipe` | pipeline | 1 | 3-3 | 1201 | 0/— | $0.1040 | 18.5s |  |
-| `gpt4o-raw` | direct | 2 | 0-6 | 1154 | 0/— | $0.0105 | 3.7s |  |
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `flash3-pipe` | pipeline | 1 | 4-2 | 1234 | 0/— | $0.0275 | 78,505 / 1,568 | 14.9s |  |
+| `flash3-raw` | direct | 2 | 5-1 | 1228 | 0/— | $0.0033 | 794 / 1,205 | 5.0s |  |
+| `gpt4o-pipe` | pipeline | 1 | 3-3 | 1201 | 0/— | $0.1040 | 34,909 / 1,671 | 18.5s |  |
+| `gpt4o-raw` | direct | 2 | 0-6 | 1154 | 0/— | $0.0105 | 882 / 833 | 3.7s |  |
 
 ### Hypotheses surfaced (6 total)
 
@@ -1050,7 +1064,8 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSGD0WKFYAF2X15P99BFAX01';
 
@@ -1082,12 +1097,12 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `claude-haiku-4.5` | pipeline | 0 | — | — | 0/5 | $0.0000 | — |  |
-| `gemini-2-flash-thinking` | pipeline | 0 | — | — | 0/5 | $0.0000 | — |  |
-| `gemini-2-pro` | pipeline | 0 | — | — | 0/5 | $0.0000 | — |  |
-| `openai-o1` | pipeline | 0 | — | — | 0/5 | $0.0000 | — |  |
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `claude-haiku-4.5` | pipeline | 0 | — | — | 0/5 | $0.0000 | — | — |  |
+| `gemini-2-flash-thinking` | pipeline | 0 | — | — | 0/5 | $0.0000 | — | — |  |
+| `gemini-2-pro` | pipeline | 0 | — | — | 0/5 | $0.0000 | — | — |  |
+| `openai-o1` | pipeline | 0 | — | — | 0/5 | $0.0000 | — | — |  |
 
 _No hypotheses produced (every candidate failed)._
 
@@ -1108,7 +1123,8 @@ _No hypotheses produced (every candidate failed)._
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSGV99YG7D4DXZ8G6PEJWKV1';
 
@@ -1140,12 +1156,12 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `openai-o1` | pipeline | 2 | 2-2 | 1201 | 0/3 | $1.1566 | 30.9s |  |
-| `gemini-2-flash-thinking` | pipeline | 2 | 2-2 | 1199 | 0/3 | $0.0015 | 7.9s |  |
-| `gemini-2-pro` | pipeline | 1 | 2-2 | 1199 | 0/3 | $0.1540 | 31.1s |  |
-| `claude-haiku-4.5` | pipeline | 0 | — | — | 0/3 | $0.5760 | — |  |
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `openai-o1` | pipeline | 2 | 2-2 | 1201 | 0/3 | $1.1566 | 14,718 / 15,598 | 30.9s |  |
+| `gemini-2-flash-thinking` | pipeline | 2 | 2-2 | 1199 | 0/3 | $0.0015 | 4,905 / 2,583 | 7.9s |  |
+| `gemini-2-pro` | pipeline | 1 | 2-2 | 1199 | 0/3 | $0.1540 | 32,906 / 11,285 | 31.1s |  |
+| `claude-haiku-4.5` | pipeline | 0 | — | — | 0/3 | $0.5760 | 544,629 / 6,270 | — |  |
 
 ### Hypotheses surfaced (5 total)
 
@@ -1182,7 +1198,8 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSGVHY16Q0GHNE9ZJWZYGFNG';
 
@@ -1214,16 +1231,16 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `gemini-2-pro[raw]` | direct | 1 | 5-0 | 1274 | 0/3 | $0.0373 | 35.5s |  |
-| `claude-haiku-4.5[raw]` | direct | 1 | 4-1 | 1244 | 0/3 | $0.0073 | 9.3s |  |
-| `openai-o1[raw]` | direct | 1 | 3-2 | 1213 | 0/3 | $0.2810 | 24.5s |  |
-| `gemini-2-flash-thinking[pipe]` | pipeline | 1 | 2-3 | 1183 | 0/3 | $0.0004 | 5.2s |  |
-| `gemini-2-flash-thinking[raw]` | direct | 1 | 1-4 | 1158 | 0/3 | $0.0002 | 3.5s |  |
-| `openai-o1[pipe]` | pipeline | 1 | 0-5 | 1128 | 0/3 | $0.4047 | 36.7s |  |
-| `claude-haiku-4.5[pipe]` | pipeline | 0 | — | — | 0/3 | $0.1237 | — |  |
-| `gemini-2-pro[pipe]` | pipeline | 0 | — | — | 0/3 | $0.0185 | — |  |
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `gemini-2-pro[raw]` | direct | 1 | 5-0 | 1274 | 0/3 | $0.0373 | 541 / 3,666 | 35.5s |  |
+| `claude-haiku-4.5[raw]` | direct | 1 | 4-1 | 1244 | 0/3 | $0.0073 | 1,432 / 1,171 | 9.3s |  |
+| `openai-o1[raw]` | direct | 1 | 3-2 | 1213 | 0/3 | $0.2810 | 612 / 4,530 | 24.5s |  |
+| `gemini-2-flash-thinking[pipe]` | pipeline | 1 | 2-3 | 1183 | 0/3 | $0.0004 | 1,635 / 621 | 5.2s |  |
+| `gemini-2-flash-thinking[raw]` | direct | 1 | 1-4 | 1158 | 0/3 | $0.0002 | 541 / 304 | 3.5s |  |
+| `openai-o1[pipe]` | pipeline | 1 | 0-5 | 1128 | 0/3 | $0.4047 | 5,633 / 5,336 | 36.7s |  |
+| `claude-haiku-4.5[pipe]` | pipeline | 0 | — | — | 0/3 | $0.1237 | 113,053 / 2,122 | — |  |
+| `gemini-2-pro[pipe]` | pipeline | 0 | — | — | 0/3 | $0.0185 | 1,635 / 1,646 | — |  |
 
 ### Hypotheses surfaced (6 total)
 
@@ -1263,7 +1280,8 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSGVRBBDNFB8MZYQZD30P180';
 
@@ -1295,16 +1313,16 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Candidates
 
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `claude-opus-4.7[raw]` | direct | 1 | 1-0 | 1216 | 0/3 | $0.1653 | 30.3s |  |
-| `gemini-3-flash[raw]` | direct | 1 | 0-1 | 1184 | 0/3 | $0.0013 | 3.3s |  |
-| `claude-opus-4.7[pipe]` | pipeline | 0 | — | — | 0/3 | $0.8328 | — |  |
-| `gemini-3-flash[pipe]` | pipeline | 0 | — | — | 0/3 | $0.0018 | — |  |
-| `gemini-3-pro[pipe]` | pipeline | 0 | — | — | 0/3 | $0.1479 | — |  |
-| `gemini-3-pro[raw]` | direct | 0 | — | — | 0/3 | $0.0000 | 151.6s |  |
-| `gpt-5[pipe]` | pipeline | 0 | — | — | 0/3 | $0.4275 | — |  |
-| `gpt-5[raw]` | direct | 0 | — | — | 0/3 | $0.2488 | 154.1s |  |
+| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `claude-opus-4.7[raw]` | direct | 1 | 1-0 | 1216 | 0/3 | $0.1653 | 2,051 / 1,794 | 30.3s |  |
+| `gemini-3-flash[raw]` | direct | 1 | 0-1 | 1184 | 0/3 | $0.0013 | 582 / 470 | 3.3s |  |
+| `claude-opus-4.7[pipe]` | pipeline | 0 | — | — | 0/3 | $0.8328 | 44,526 / 2,199 | — |  |
+| `gemini-3-flash[pipe]` | pipeline | 0 | — | — | 0/3 | $0.0018 | 4,315 / 199 | — |  |
+| `gemini-3-pro[pipe]` | pipeline | 0 | — | — | 0/3 | $0.1479 | 114,232 / 5,058 | — |  |
+| `gemini-3-pro[raw]` | direct | 0 | — | — | 0/3 | $0.0000 | — | 151.6s |  |
+| `gpt-5[pipe]` | pipeline | 0 | — | — | 0/3 | $0.4275 | 20,076 / 16,355 | — |  |
+| `gpt-5[raw]` | direct | 0 | — | — | 0/3 | $0.2488 | 615 / 12,288 | 154.1s |  |
 
 ### Hypotheses surfaced (2 total)
 
@@ -1332,7 +1350,8 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 -- per-candidate detail
 SELECT label, mode, n_hypotheses, wins, losses,
        round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4)
+       round(total_cost_usd, 4),
+       total_input_tok, total_output_tok
   FROM bench_candidates
  WHERE bench_id='bnc_01KSGW0H3KH2CTGV4JCTWC63V1';
 

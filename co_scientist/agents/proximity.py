@@ -40,12 +40,13 @@ class ProximityAgent(BaseAgent):
         await store.load_or_create()
 
         hyps = await hyp_repo.list_for_session(self.deps.db, session_id)
-        # Identify hypotheses missing an embedding for this model.
-        to_embed = []
-        for h in hyps:
-            has = await emb_repo.has_embedding(self.deps.db, h.id, embedder.model)
-            if not has:
-                to_embed.append(h)
+        # Identify hypotheses missing an embedding for this model. One query
+        # over the whole session instead of N has_embedding() probes.
+        rows = await emb_repo.list_for_session(self.deps.db, session_id)
+        existing_for_model = {
+            r["hypothesis_id"] for r in rows if r["model"] == embedder.model
+        }
+        to_embed = [h for h in hyps if h.id not in existing_for_model]
 
         if to_embed:
             texts = [(h.title + "\n\n" + h.summary) for h in to_embed]
@@ -101,8 +102,8 @@ class ProximityAgent(BaseAgent):
         n = store.n
         if n < 2 or store.index is None:
             return None
-        vecs = store.index.reconstruct_n(0, n)
-        dist = 1.0 - (vecs @ vecs.T)
+        sim = await store.cosine_matrix()    # locked + threaded
+        dist = 1.0 - sim
         np.fill_diagonal(dist, 0.0)
         # symmetrize numerically
         dist = (dist + dist.T) / 2.0

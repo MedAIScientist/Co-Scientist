@@ -165,12 +165,19 @@ class RankingAgent(BaseAgent):
         *,
         focus_id: str | None,
     ) -> tuple[Hypothesis, Hypothesis, float | None] | None:
+        # Build the FAISS store once for this pair selection — every prior
+        # iteration re-instantiated the embedder, re-read index.faiss + JSON
+        # off disk, and reconstructed the entire index just to dot-product two
+        # rows. With ~20 pair candidates per RunTournamentBatch that was
+        # ~20 full-index reloads and reconstructions for a single match.
+        store = await self._load_store(session_id)
+
         if focus_id:
             focus = next((h for h in candidates if h.id == focus_id), None)
             if focus is not None:
                 opp = self._nearest_elo(focus, [h for h in candidates if h.id != focus_id])
                 if opp is not None:
-                    sim = await self._similarity(session_id, focus, opp)
+                    sim = self._similarity(store, focus, opp)
                     return focus, opp, sim
 
         new_hyps = [h for h in candidates if h.matches_played < 3]
@@ -183,12 +190,12 @@ class RankingAgent(BaseAgent):
             a = random.choice(new_hyps)
             b = self._nearest_elo(a, warm)
             if b is not None:
-                return a, b, await self._similarity(session_id, a, b)
+                return a, b, self._similarity(store, a, b)
 
         # Bucket 2: similar-Elo pair within the warm set, weighted by (1 - cosine_similarity)
         # so we prefer pairs that are *distant in idea-space* — debate over differing approaches.
         if r < cfg.p_new + cfg.p_close and len(warm) >= 2:
-            pair = await self._sample_close_elo(session_id, warm)
+            pair = self._sample_close_elo(store, warm)
             if pair is not None:
                 return pair
 
@@ -198,7 +205,7 @@ class RankingAgent(BaseAgent):
             top = sorted_by_elo[: max(2, len(candidates) // 2)]
             if len(top) >= 2:
                 a, b = random.sample(top, 2)
-                return a, b, await self._similarity(session_id, a, b)
+                return a, b, self._similarity(store, a, b)
         return None
 
     def _nearest_elo(
@@ -208,8 +215,8 @@ class RankingAgent(BaseAgent):
             return None
         return min(pool, key=lambda h: abs((h.elo or 1200) - (target.elo or 1200)))
 
-    async def _sample_close_elo(
-        self, session_id: str, pool: list[Hypothesis]
+    def _sample_close_elo(
+        self, store: FaissStore | None, pool: list[Hypothesis]
     ) -> tuple[Hypothesis, Hypothesis, float | None] | None:
         """Among pairs with |Δelo|<200, sample weighted by exp(-Δelo/200)*(1-sim)."""
         if len(pool) < 2:
@@ -222,7 +229,7 @@ class RankingAgent(BaseAgent):
                 d_elo = abs((a.elo or 1200) - (b.elo or 1200))
                 if d_elo > 200:
                     continue
-                sim = await self._similarity(session_id, a, b)
+                sim = self._similarity(store, a, b)
                 w_sim = 1.0 - (sim if sim is not None else 0.0)
                 w = float(np.exp(-d_elo / 200.0)) * max(w_sim, 0.05)
                 weights.append(w)
@@ -244,10 +251,8 @@ class RankingAgent(BaseAgent):
                 return pair
         return pairs[-1]
 
-    async def _similarity(
-        self, session_id: str, a: Hypothesis, b: Hypothesis
-    ) -> float | None:
-        """Cosine via the session's FAISS store (already L2-normalized)."""
+    async def _load_store(self, session_id: str) -> FaissStore | None:
+        """Instantiate + load the session FAISS store once for pair selection."""
         try:
             embedder = make_embedder(self.deps.cfg)
         except (RuntimeError, ValueError):
@@ -256,12 +261,26 @@ class RankingAgent(BaseAgent):
         await store.load_or_create()
         if store.n == 0:
             return None
+        return store
+
+    def _similarity(
+        self, store: FaissStore | None, a: Hypothesis, b: Hypothesis
+    ) -> float | None:
+        """Cosine via the session's FAISS store (already L2-normalized).
+
+        Reconstructs only the two rows we need (O(2·dim)) — the previous
+        version called `reconstruct_n(0, n)` for every pair, materialising
+        the full N×dim matrix just to read two rows.
+        """
+        if store is None or store.index is None or store.n == 0:
+            return None
         i = store.offset_of(a.id)
         j = store.offset_of(b.id)
         if i is None or j is None:
             return None
-        vecs = store.index.reconstruct_n(0, store.n)
-        return float(vecs[i] @ vecs[j])
+        vec_i = store.index.reconstruct(int(i))
+        vec_j = store.index.reconstruct(int(j))
+        return float(vec_i @ vec_j)
 
     # ----------------------------- mode selection ----------------------------- #
 

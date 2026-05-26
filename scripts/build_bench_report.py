@@ -65,6 +65,8 @@ class CandRow:
     mean_elo: float | None
     top_elo: float | None
     total_cost_usd: float
+    total_input_tok: int
+    total_output_tok: int
     mean_latency_ms: int | None
     gold_hits: int
     gold_hit_names: list[str]
@@ -89,7 +91,8 @@ def _load_candidates(con: sqlite3.Connection, bench_id: str) -> list[CandRow]:
     rows = con.execute(
         """SELECT id, label, provider, model, mode,
                   n_hypotheses, wins, losses, mean_elo, top_elo,
-                  total_cost_usd, mean_latency_ms,
+                  total_cost_usd, total_input_tok, total_output_tok,
+                  mean_latency_ms,
                   gold_hits, gold_hit_names, error
              FROM bench_candidates
             WHERE bench_id=?
@@ -248,10 +251,14 @@ def _bench_section(con: sqlite3.Connection, b: BenchRow) -> str:
         lines.append("### Candidates")
         lines.append("")
         headers = ["label", "mode", "n_hyps", "W-L", "Elo",
-                   "hits (runtime)", "$", "p50", "note"]
+                   "hits (runtime)", "$", "tokens (in / out)", "p50", "note"]
         rows = []
         for c in cands:
             note = (c.error or "")[:60]
+            tokens_cell = (
+                f"{c.total_input_tok:,} / {c.total_output_tok:,}"
+                if (c.total_input_tok or c.total_output_tok) else "—"
+            )
             rows.append([
                 f"`{c.label}`",
                 c.mode or "pipeline",
@@ -260,6 +267,7 @@ def _bench_section(con: sqlite3.Connection, b: BenchRow) -> str:
                 _fmt_elo(c.mean_elo),
                 f"{c.gold_hits}/{b.goldset_size or '—'}",
                 _fmt_usd(c.total_cost_usd),
+                tokens_cell,
                 _fmt_ms(c.mean_latency_ms),
                 note,
             ])
@@ -318,7 +326,8 @@ def _bench_section(con: sqlite3.Connection, b: BenchRow) -> str:
         lines.append("-- per-candidate detail")
         lines.append("SELECT label, mode, n_hypotheses, wins, losses,")
         lines.append("       round(mean_elo,0), gold_hits, gold_hit_names,")
-        lines.append("       round(total_cost_usd, 4)")
+        lines.append("       round(total_cost_usd, 4),")
+        lines.append("       total_input_tok, total_output_tok")
         lines.append("  FROM bench_candidates")
         lines.append(f" WHERE bench_id='{b.id}';")
         lines.append("")

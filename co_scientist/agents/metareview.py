@@ -127,11 +127,17 @@ class MetaReviewAgent(BaseAgent):
         if not top:
             top = all_hyps[:10]
 
+        # Fetch all reviews for the session in one query, then group by
+        # hypothesis_id. Beats N+1 list_for_hypothesis() calls for top-K.
+        reviews_by_hyp: dict[str, list] = {}
+        for rv in await rev_repo.list_for_session(self.deps.db, session.id):
+            reviews_by_hyp.setdefault(rv.hypothesis_id, []).append(rv)
+
         # Build the top-hypotheses block: summary + best review + winning rationale
         chunks: list[str] = []
         for h in top:
             review_lines: list[str] = []
-            for r in await rev_repo.list_for_hypothesis(self.deps.db, h.id):
+            for r in reviews_by_hyp.get(h.id, []):
                 review_lines.append(
                     f"  - {r.kind}: verdict={r.verdict or '?'} "
                     f"(n={r.scores.novelty}, c={r.scores.correctness}, t={r.scores.testability})"

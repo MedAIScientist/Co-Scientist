@@ -20,12 +20,17 @@ async def test_admit_then_settle_updates_counters() -> None:
     await b.settle(
         "generation",
         est_tokens=1000, est_usd=0.5,
-        actual_tokens=800, actual_usd=0.40,
+        actual_input_tokens=500, actual_output_tokens=300, actual_usd=0.40,
     )
     snap2 = b.snapshot()
     assert snap2["_global"]["reserved_usd"] == pytest.approx(0.0)
     assert snap2["_global"]["used_usd"] == pytest.approx(0.40)
+    assert snap2["_global"]["used_tokens"] == 800
+    assert snap2["_global"]["used_input_tokens"] == 500
+    assert snap2["_global"]["used_output_tokens"] == 300
     assert snap2["generation"]["used_usd"] == pytest.approx(0.40)
+    assert snap2["generation"]["used_input_tokens"] == 500
+    assert snap2["generation"]["used_output_tokens"] == 300
 
 
 @pytest.mark.asyncio
@@ -87,7 +92,7 @@ async def test_settle_with_zero_actual_releases_reservation() -> None:
     await b.settle(
         "generation",
         est_tokens=500, est_usd=0.20,
-        actual_tokens=0, actual_usd=0.0,
+        actual_input_tokens=0, actual_output_tokens=0, actual_usd=0.0,
     )
     snap_end = b.snapshot()
     assert snap_end["_global"]["reserved_usd"] == pytest.approx(0.0)

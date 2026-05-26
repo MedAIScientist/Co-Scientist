@@ -93,13 +93,17 @@ def _entity_matches(entity: GoldEntity, fields: dict[str, str]) -> list[HitRecor
     text to scan. We iterate field-by-field in the caller; this just
     checks one entity against one bundle of fields.
     """
-    names = [entity.name, *entity.aliases]
-    name_tokens = [_tokens(n) for n in names if _tokens(n)]
+    # Keep (alias, alias_tokens) pairs aligned. Drop aliases whose tokens
+    # are empty (e.g. Unicode-only names like "β" — _ALPHANUM_RE strips them
+    # to nothing) so we don't match every haystack on an empty needle.
+    alias_token_pairs = [
+        (n, toks) for n in (entity.name, *entity.aliases) if (toks := _tokens(n))
+    ]
     for field_label, text in fields.items():
         if not text:
             continue
         text_toks = _tokens(text)
-        for alias, alias_toks in zip(names, name_tokens, strict=False):
+        for alias, alias_toks in alias_token_pairs:
             if _contains_subseq(text_toks, alias_toks):
                 return [HitRecord(
                     entity=entity.name, matched_alias=alias,

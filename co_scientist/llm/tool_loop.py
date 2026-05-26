@@ -130,6 +130,7 @@ async def run_tool_loop(
             )
 
         tool_uses = tool_uses[:parallel_cap]
+        kept_ids = {getattr(tu, "id", None) for tu in tool_uses}
 
         # Dispatch in parallel
         results = await asyncio.gather(
@@ -151,10 +152,17 @@ async def run_tool_loop(
                 seen_urls.add(u)
 
         # Build next-turn spec: append the assistant message + a single user message
-        # carrying all tool_result blocks.
+        # carrying all tool_result blocks. The assistant message must only carry
+        # the tool_use blocks we actually dispatched — Anthropic requires every
+        # tool_use to be paired with exactly one tool_result on the next turn.
+        assistant_blocks = _content_to_dicts(resp.raw.content)
+        assistant_blocks = [
+            b for b in assistant_blocks
+            if b.get("type") != "tool_use" or b.get("id") in kept_ids
+        ]
         next_messages: list[dict[str, Any]] = list(current_spec.extra_messages)
         next_messages.append(
-            {"role": "assistant", "content": _content_to_dicts(resp.raw.content)}
+            {"role": "assistant", "content": assistant_blocks}
         )
         next_messages.append(
             {
@@ -199,7 +207,7 @@ async def _dispatch(
     args = dict(tool_use.input) if isinstance(tool_use.input, dict) else {"args": tool_use.input}
     try:
         result = await asyncio.wait_for(
-            registry.call(tool_use.name, args, tctx), timeout=timeout_s + 5
+            registry.call(tool_use.name, args, tctx), timeout=timeout_s
         )
     except TimeoutError:
         return {

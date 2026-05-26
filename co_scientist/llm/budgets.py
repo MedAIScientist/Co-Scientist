@@ -18,7 +18,9 @@ class BudgetExceeded(Exception):
 
 @dataclass
 class _Counter:
-    used_tokens: int = 0
+    used_tokens: int = 0                # input + output, kept for legacy callers
+    used_input_tokens: int = 0
+    used_output_tokens: int = 0
     used_usd: float = 0.0
     reserved_tokens: int = 0
     reserved_usd: float = 0.0
@@ -95,24 +97,42 @@ class TokenBudget:
         *,
         est_tokens: int,
         est_usd: float,
-        actual_tokens: int,
         actual_usd: float,
+        actual_input_tokens: int = 0,
+        actual_output_tokens: int = 0,
+        actual_tokens: int | None = None,
     ) -> None:
+        """Release the reservation and credit actual usage.
+
+        Pass `actual_input_tokens` and `actual_output_tokens` separately so the
+        bench (and any future per-input/output accounting) can read them from
+        the snapshot. The legacy `actual_tokens` kwarg is treated as a combined
+        total and credited only to `used_tokens` — its split is unknown so the
+        per-input/output counters stay at 0 for that call.
+        """
+        if actual_tokens is None:
+            actual_tokens = actual_input_tokens + actual_output_tokens
         async with self._lock:
             ctr = self._per_agent.setdefault(agent, _Counter())
             ctr.reserved_tokens = max(0, ctr.reserved_tokens - est_tokens)
             ctr.reserved_usd = max(0.0, ctr.reserved_usd - est_usd)
             ctr.used_tokens += actual_tokens
+            ctr.used_input_tokens += actual_input_tokens
+            ctr.used_output_tokens += actual_output_tokens
             ctr.used_usd += actual_usd
             self._global.reserved_tokens = max(0, self._global.reserved_tokens - est_tokens)
             self._global.reserved_usd = max(0.0, self._global.reserved_usd - est_usd)
             self._global.used_tokens += actual_tokens
+            self._global.used_input_tokens += actual_input_tokens
+            self._global.used_output_tokens += actual_output_tokens
             self._global.used_usd += actual_usd
 
     def snapshot(self) -> dict[str, dict[str, float | int]]:
         out: dict[str, dict[str, float | int]] = {
             "_global": {
                 "used_tokens": self._global.used_tokens,
+                "used_input_tokens": self._global.used_input_tokens,
+                "used_output_tokens": self._global.used_output_tokens,
                 "used_usd": self._global.used_usd,
                 "reserved_tokens": self._global.reserved_tokens,
                 "reserved_usd": self._global.reserved_usd,
@@ -123,6 +143,8 @@ class TokenBudget:
         for agent, ctr in self._per_agent.items():
             out[agent] = {
                 "used_tokens": ctr.used_tokens,
+                "used_input_tokens": ctr.used_input_tokens,
+                "used_output_tokens": ctr.used_output_tokens,
                 "used_usd": ctr.used_usd,
                 "reserved_tokens": ctr.reserved_tokens,
                 "reserved_usd": ctr.reserved_usd,

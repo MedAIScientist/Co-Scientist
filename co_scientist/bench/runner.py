@@ -344,7 +344,6 @@ async def _generate_for_candidate(
     deps = AgentDeps(cfg=cfg, db=conn, llm=llm, tools=tools)
     agent = GenerationAgent(deps)
 
-    initial_cost = 0.0
     for i in range(n_hyps):
         task = Task(
             id=ids.task_id(), session_id=ses.id,
@@ -398,10 +397,12 @@ async def _generate_for_candidate(
             except Exception as e:
                 log.debug("bench_record_load_failed", hid=hid, err=str(e))
 
-    # Budget accounting: pull the post-run snapshot.
+    # Budget accounting: pull the post-run snapshot. Each candidate has its
+    # own TokenBudget so the global counter is the candidate's total.
     snap = budget.snapshot().get("_global", {})
-    st.cost_usd = float(snap.get("used_usd", 0.0)) - initial_cost
-    st.input_tok = int(snap.get("used_tokens", 0))
+    st.cost_usd = float(snap.get("used_usd", 0.0))
+    st.input_tok = int(snap.get("used_input_tokens", 0))
+    st.output_tok = int(snap.get("used_output_tokens", 0))
 
 
 async def _generate_direct_for_candidate(
@@ -430,7 +431,6 @@ async def _generate_direct_for_candidate(
     from ..storage.repos import hypotheses as hyp_repo
 
     plan = ses.research_plan
-    initial_cost = 0.0
     for i in range(n_hyps):
         task = Task(
             id=ids.task_id(), session_id=ses.id,
@@ -583,8 +583,9 @@ async def _generate_direct_for_candidate(
         st.hypothesis_records.append(record_copy)
 
     snap = budget.snapshot().get("_global", {})
-    st.cost_usd = float(snap.get("used_usd", 0.0)) - initial_cost
-    st.input_tok = int(snap.get("used_tokens", 0))
+    st.cost_usd = float(snap.get("used_usd", 0.0))
+    st.input_tok = int(snap.get("used_input_tokens", 0))
+    st.output_tok = int(snap.get("used_output_tokens", 0))
 
 
 def _candidate_cfg(base_cfg: Config, provider: str, model: str) -> Config:
@@ -911,6 +912,8 @@ def _build_summary(
             "mean_elo": sum(elos) / len(elos) if elos else None,
             "top_elo": max(elos) if elos else None,
             "cost_usd": round(st.cost_usd, 4),
+            "input_tokens": st.input_tok,
+            "output_tokens": st.output_tok,
             "mean_latency_ms": (sum(st.latencies_ms) // len(st.latencies_ms))
                 if st.latencies_ms else None,
             "gold_hits": len(hit_names),

@@ -175,7 +175,8 @@ class AnthropicClient:
                 ctx.agent,
                 est_tokens=est_in + est_out,
                 est_usd=est_cost,
-                actual_tokens=0,
+                actual_input_tokens=0,
+                actual_output_tokens=0,
                 actual_usd=0.0,
             )
             raise
@@ -198,7 +199,8 @@ class AnthropicClient:
             ctx.agent,
             est_tokens=est_in + est_out,
             est_usd=est_cost,
-            actual_tokens=in_tok + out_tok,
+            actual_input_tokens=in_tok,
+            actual_output_tokens=out_tok,
             actual_usd=cost_usd,
         )
 
