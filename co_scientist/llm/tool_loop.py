@@ -52,6 +52,7 @@ async def run_tool_loop(
     max_iters: int,
     parallel_cap: int = 4,
     tool_timeout_s: float = 30.0,
+    force_terminal_tool: str | None = None,
     terminal_tool_names: tuple[str, ...] = (
         "record_hypothesis",
         "record_review",
@@ -75,6 +76,12 @@ async def run_tool_loop(
       ToolLoopExhausted — even though a perfectly good record was emitted
       on the first call.
     - max_iters reached — raise ToolLoopExhausted.
+
+    `force_terminal_tool`: if set, the *final* allowed iteration forces
+    `tool_choice` to that tool so the model must emit a record instead of
+    spending its last turn on yet another search. This prevents the
+    "looped until exhausted, produced nothing" failure mode where a model
+    keeps verifying novelty and never commits.
     """
     seen_urls: set[str] = set()
     tool_calls_log: list[dict[str, Any]] = []
@@ -86,7 +93,21 @@ async def run_tool_loop(
 
     while iterations < max_iters:
         iterations += 1
-        resp = await client.call(current_spec, ctx)
+        # On the final allowed iteration, optionally force the recording tool so
+        # the model commits instead of burning its last turn on another search.
+        call_spec = current_spec
+        if force_terminal_tool and iterations == max_iters:
+            call_spec = AgentCallSpec(
+                route=current_spec.route,
+                system_blocks=current_spec.system_blocks,
+                user_blocks=current_spec.user_blocks,
+                tools=current_spec.tools,
+                tool_choice={"type": "tool", "name": force_terminal_tool},
+                max_output_tokens=current_spec.max_output_tokens,
+                stop_sequences=current_spec.stop_sequences,
+                extra_messages=current_spec.extra_messages,
+            )
+        resp = await client.call(call_spec, ctx)
         last = resp
         stop = getattr(resp.raw, "stop_reason", None)
 

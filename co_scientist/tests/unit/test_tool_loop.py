@@ -174,3 +174,50 @@ async def test_loop_terminates_on_custom_terminal_tool() -> None:
         terminal_tool_names=("my_done_signal",),
     )
     assert result.iterations == 1
+
+
+@pytest.mark.asyncio
+async def test_force_terminal_tool_on_final_iteration() -> None:
+    """A model that only ever searches should be forced to record on the last
+    iteration when force_terminal_tool is set — instead of exhausting the loop."""
+    from co_scientist.tools.base import ToolResult
+
+    # The model keeps searching forever unless tool_choice forces a specific
+    # tool — exactly how a real provider behaves under a forced tool_choice.
+    def _respect_tool_choice(spec, *_a, **_k):
+        tc = spec.tool_choice or {}
+        if tc.get("type") == "tool" and tc.get("name") == "record_hypothesis":
+            return _fake_response(
+                stop_reason="tool_use",
+                blocks=[{
+                    "type": "tool_use", "id": "r", "name": "record_hypothesis",
+                    "input": {"title": "t", "statement": "s"},
+                }],
+            )
+        return _fake_response(
+            stop_reason="tool_use",
+            blocks=[{"type": "tool_use", "id": "s", "name": "search", "input": {"q": "x"}}],
+        )
+
+    client = MagicMock()
+    client.call = AsyncMock(side_effect=_respect_tool_choice)
+    registry = MagicMock()
+    registry._cfg = SimpleNamespace()
+    registry.call = AsyncMock(return_value=ToolResult(
+        is_error=False, content={"n": 0, "results": []}, duration_ms=1,
+    ))
+
+    result = await run_tool_loop(
+        client, spec=_spec(), ctx=_ctx(), registry=registry,
+        max_iters=3, parallel_cap=4, tool_timeout_s=1.0,
+        force_terminal_tool="record_hypothesis",
+    )
+    # The loop committed on the forced final iteration instead of exhausting.
+    assert result.iterations == 3
+    assert result.tool_calls[-1]["name"] == "record_hypothesis"
+    # The final (3rd) call forced tool_choice to record_hypothesis.
+    final_spec = client.call.await_args_list[-1].args[0]
+    assert final_spec.tool_choice == {"type": "tool", "name": "record_hypothesis"}
+    # Earlier calls used the original auto tool_choice (no forcing).
+    first_spec = client.call.await_args_list[0].args[0]
+    assert first_spec.tool_choice != {"type": "tool", "name": "record_hypothesis"}

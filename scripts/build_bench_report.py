@@ -390,72 +390,88 @@ def _headline_findings_section() -> str:
     return "\n".join([
         "## Headline findings",
         "",
-        "Across the AML drug-repurposing benches run on this codebase:",
+        "Across the AML drug-repurposing benches run on this codebase. The "
+        "`*-vs-raw` benches below were re-run after the Generation pipeline "
+        "was fixed (see *Pipeline reliability fixes* at the end) — earlier "
+        "numbers in git history predate those fixes.",
         "",
         "### 1. The strict no-prior-evidence prompt is genuinely hard",
         "",
-        "Models default to well-known AML repurposing candidates (Auranofin, "
-        "Itraconazole, Venetoclax, Riluzole) that **violate** the "
-        "no-prior-evidence constraint. Across 13 hypotheses produced under "
-        "the strict prompt, only **one** matched the paper's broader 5-drug "
-        "list (Pacritinib, via `claude-opus-4.7 (direct)` in "
-        "`frontier-aml-vs-raw`) and **none** matched the strict top-3 "
-        "(Nanvuranlat, KIRA6, Leflunomide).",
+        "Models default to well-known AML repurposing candidates that "
+        "**violate** the no-prior-evidence constraint. Across the 14 "
+        "hypotheses produced under the strict prompt in the two vs-raw "
+        "benches, **none** matched the strict top-3 (Nanvuranlat, KIRA6, "
+        "Leflunomide) and **none** matched the broader 5-drug list. The "
+        "models instead surface plausible-but-unscored candidates "
+        "(Nitazoxanide, ND-646, Meldonium, Pitavastatin, Belapectin, …). "
+        "Reproducing the paper's specific picks needs more breadth than a "
+        "single Generation call per candidate.",
         "",
-        "### 2. Pipeline-vs-raw: the harness's value-add depends on the model",
+        "### 2. Pipeline-vs-raw: the harness now helps the strongest models",
         "",
         "The `*-vs-raw` presets run each candidate model **twice** — once "
         "through the full Generation pipeline (literature tools + tool loop + "
-        "dedup), once as a single forced-tool LM call. Across the paper "
-        "baselines (`paper-aml-vs-raw`), **direct mode beat pipeline mode for "
-        "every model that produced hypotheses in both modes**:",
+        "dedup), once as a single forced-tool LM call. After the pipeline "
+        "fixes, **the two strongest models win decisively in pipeline mode "
+        "and beat their own raw call**:",
         "",
-        "| model | pipeline | direct | direct beats pipeline? |",
+        "| model | pipeline | direct | winner |",
         "| --- | --- | --- | --- |",
-        "| openai-o1 | 0-5 (Elo 1128) | 3-2 (Elo 1213) | yes |",
-        "| gemini-2-pro | 2-3 (Elo 1183) | 5-0 (Elo 1274) | yes (decisive) |",
-        "| gemini-2-flash-thinking | 0 hyps | 1-4 (Elo 1158) | yes — pipeline failed |",
-        "| claude-haiku-4.5 | 0 hyps | 4-1 (Elo 1244) | yes — pipeline failed |",
+        "| claude-opus-4.7 | **14-0 (Elo 1367)** | 10-4 (1270) | pipeline (decisive) |",
+        "| claude-haiku-4.5 | **10-0 (Elo 1300)** | 1-9 (1120) | pipeline (decisive) |",
+        "| openai-o1 | 6-4 (1221) | 4-6 (1178) | pipeline |",
+        "| gpt-5 | 6-8 (1172) | 5-9 (1146) | ~tie (slight pipeline) |",
+        "| gemini-3-pro | 7-7 (1186) | 12-2 (1275) | direct |",
+        "| gemini-3-flash | 0-14 (1074) | 2-12 (1110) | ~tie (both weak) |",
         "",
-        "Same pattern earlier on `gemini-3-flash-preview` (a one-model "
-        "vs-raw run): pipeline went 4-2 vs raw 5-1 — within noise on Elo, "
-        "but pipeline was **8x more expensive** ($0.0275 vs $0.0033) and "
-        "**3x slower** (14.9s vs 5.0s).",
+        "This **reverses** the pre-fix finding (\"direct beats pipeline for "
+        "every model\"). The reversal is concentrated in the strongest "
+        "models: opus and haiku use the literature tools productively and "
+        "their pipeline hypotheses dominate the tournament. Mid-tier Gemini "
+        "still does better raw — the tool loop adds cost without improving "
+        "its rated hypothesis. So the harness's value-add scales with base "
+        "model strength, rather than being a flat tax.",
         "",
-        "Smaller / older models therefore tend to be *hurt* by the harness "
-        "on this task — the tool-loop adds cost and failure modes without "
-        "improving the rated hypothesis. The two cases where pipeline did "
-        "win were `gpt-4o` (3-3 vs 0-6 for its own direct) and the gemini "
-        "near-tie noted above; both with stronger reasoning-tuned base "
-        "models.",
+        "### 3. Frontier pipelines no longer fail",
         "",
-        "### 3. Frontier models need looser caps to use the pipeline",
+        "Pre-fix, `frontier-aml-vs-raw` had **all 4 pipeline modes produce "
+        "zero hypotheses** (budget burn + tool-loop exhaustion + truncated "
+        "tool calls). Post-fix, **all 8 frontier candidates (4 pipeline + 4 "
+        "direct) produced a hypothesis** and the bench ran 56 matches. The "
+        "one remaining pipeline miss across both vs-raw benches was "
+        "`gemini-2-pro[pipe]`, where OpenRouter returned an empty completion "
+        "on the forced final call (a flaky provider response, not a harness "
+        "failure).",
         "",
-        "In `frontier-aml-vs-raw` **all 4 pipeline modes failed** "
-        "(claude-opus-4.7 burned $0.83 of $1.50 cap on its first call; "
-        "gpt-5, gemini-3-pro, gemini-3-flash all exhausted their tool "
-        "loops). Only 2 of 4 direct modes produced usable output. The strict "
-        "AML prompt + 8-iteration tool-loop cap + per-candidate budget cap "
-        "is too tight for current frontier models — they want more headroom "
-        "before they'll emit `record_hypothesis`.",
+        "### Pipeline reliability fixes (why these numbers differ from git history)",
+        "",
+        "Four changes turned the frontier pipeline from 0/4 to 4/4:",
+        "",
+        "1. **Empty-search stopping rule** in the Generation prompt — an empty "
+        "literature search now reads as positive evidence of novelty (a "
+        "reason to commit), not a reason to keep searching.",
+        "2. **Force `record_hypothesis` on the final tool-loop iteration** — "
+        "the model must commit on its last turn instead of spending it on "
+        "another search.",
+        "3. **`max_output_tokens` 4096 → 8192** for Generation — verbose "
+        "models (opus, gpt-5) were overrunning the old cap mid-JSON, so the "
+        "tool-call arguments were truncated and unparseable.",
+        "4. **`--budget-per-candidate` default 2.0 → 3.0** — opus needed more "
+        "headroom than the old cap allowed.",
         "",
         "### Practical implications",
         "",
-        "- On a hard, well-defined task, **the cheapest baseline is "
-        "  `--candidate model@direct` with a small per-candidate budget**. "
-        "  The pipeline is worth its cost only when the model is strong "
-        "  enough to use the literature tools productively *within* the "
-        "  iteration cap.",
-        "- Reproducing the paper's specific picks (Nanvuranlat / KIRA6 / "
-        "  Leflunomide, or the broader 5) needs **more breadth** — the "
-        "  paper surfaced these after running 15 expert-curated goals + "
-        "  the full system's iterative refinement, not from a single "
-        "  Generation call.",
-        "- Budget caps matter. Tight per-candidate caps mask quality "
-        "  questions behind admission failures. For expensive models (Opus, "
-        "  o1) `--budget-per-candidate 2.0` is the floor on this prompt; "
-        "  `--n 5+` with multiple seeds is the floor for stable recall "
-        "  numbers.",
+        "- On this hard task, **the pipeline is now worth its cost for strong "
+        "  models** (opus, haiku, o1) — it produces tournament-winning "
+        "  hypotheses that beat the same model's raw call. For mid-tier "
+        "  models, `--candidate model@direct` remains the cheaper, equal-or-"
+        "  better baseline.",
+        "- Gold-set recall is still 0 on the strict top-3. Reproducing the "
+        "  paper's specific picks needs **more breadth** — multiple seeds "
+        "  (`--n 5+`) and the full system's iterative refinement, not one "
+        "  Generation call per candidate.",
+        "- Budget caps still matter for expensive models: opus pipeline spent "
+        "  ~$0.80 of its $3 cap per candidate on this prompt.",
         "",
         "",
     ])

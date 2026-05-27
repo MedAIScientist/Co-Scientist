@@ -55,7 +55,16 @@ class GenerationAgent(BaseAgent):
             "pubmed_search, arxiv_search, europe_pmc_search, web_fetch). Pull "
             "abstracts for the most relevant items, then synthesize. After you "
             "have surveyed the literature, call `record_hypothesis` exactly once "
-            "with your proposed hypothesis."
+            "with your proposed hypothesis.\n\n"
+            "IMPORTANT — interpreting empty search results: an empty result set "
+            "(no hits) is positive evidence that the literature you searched for "
+            "does not exist. When the goal requires a candidate with NO prior "
+            "published evidence, empty searches CONFIRM novelty — they are a "
+            "reason to PROCEED, not to keep searching. Do not chase confirmation "
+            "you will never get. After at most 2-3 searches that return no "
+            "relevant hits for a candidate, treat its novelty as established and "
+            "call `record_hypothesis`. A recorded hypothesis backed by a few "
+            "empty searches is far better than running out of turns with nothing."
         )
 
         prompt = render(
@@ -66,7 +75,10 @@ class GenerationAgent(BaseAgent):
             instructions=(
                 "Propose ONE hypothesis (the strongest you can justify) and "
                 "register it via the record_hypothesis tool. Do not propose more "
-                "than one — additional hypotheses come from separate Generation calls."
+                "than one — additional hypotheses come from separate Generation calls. "
+                "You MUST end this task by calling record_hypothesis; do not keep "
+                "searching indefinitely. Budget your literature search to a handful "
+                "of queries, then commit."
             ),
         )
         _ = n_target  # n_target controls how many parallel Generation tasks are enqueued, not per-call output
@@ -90,7 +102,11 @@ class GenerationAgent(BaseAgent):
             user_blocks=user_blocks,
             tools=tools,
             tool_choice={"type": "auto"},
-            max_output_tokens=4096,
+            # A full record_hypothesis payload (statement + mechanism + entities
+            # + outcomes + novelty + citations) is large; verbose / reasoning
+            # models overran the old 4096 cap mid-JSON, so the arguments string
+            # was truncated and unparseable. 8192 leaves room to complete it.
+            max_output_tokens=8192,
         )
         ctx = CallContext(
             session_id=task.session_id, task_id=task.id,
@@ -105,6 +121,7 @@ class GenerationAgent(BaseAgent):
                 max_iters=self.deps.cfg.tool_loop.generation_max_iters,
                 parallel_cap=self.deps.cfg.tool_loop.parallel_cap,
                 tool_timeout_s=self.deps.cfg.tool_loop.tool_timeout_seconds,
+                force_terminal_tool="record_hypothesis",
             )
         except ToolLoopExhausted as e:
             raise RuntimeError(f"generation exhausted tool loop: {e}") from e

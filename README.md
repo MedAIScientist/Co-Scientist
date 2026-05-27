@@ -202,11 +202,12 @@ co-scientist bench --preset paper --budget-per-candidate 1.5
 # Score against the paper's AML drug picks:
 co-scientist bench --preset paper-aml --n 3 --matches 2
 
-# Compare multi-agent pipeline vs raw model call on the same goal:
-co-scientist bench --preset paper-aml-vs-raw --n 1 --budget-per-candidate 1.5
+# Compare multi-agent pipeline vs raw model call on the same goal
+# (--budget-per-candidate defaults to 3.0; frontier models need it):
+co-scientist bench --preset paper-aml-vs-raw --n 1
 
 # Current frontier models, pipeline vs raw:
-co-scientist bench --preset frontier-aml-vs-raw --n 1 --budget-per-candidate 2.0
+co-scientist bench --preset frontier-aml-vs-raw --n 1
 ```
 
 ### Pipeline vs raw LM (one model, isolated)

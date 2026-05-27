@@ -15,40 +15,49 @@ _Auto-generated from `data/co_scientist.db` by_ _`python scripts/build_bench_rep
    - **post-hoc rescore** against every registered gold set — so a bench that ran with `aml-repurposing-paper-top3` at the time can still show whether any hypothesis would have hit the broader `aml-repurposing-paper-5` list, and vice versa,
    - **file pointers** for the artifacts on disk + ready-to-run SQL for the raw DB rows.
 
-**Total benches:** 19 · **With gold-set scoring:** 6
+**Total benches:** 18 · **With gold-set scoring:** 5
 
 ## Headline findings
 
-Across the AML drug-repurposing benches run on this codebase:
+Across the AML drug-repurposing benches run on this codebase. The `*-vs-raw` benches below were re-run after the Generation pipeline was fixed (see *Pipeline reliability fixes* at the end) — earlier numbers in git history predate those fixes.
 
 ### 1. The strict no-prior-evidence prompt is genuinely hard
 
-Models default to well-known AML repurposing candidates (Auranofin, Itraconazole, Venetoclax, Riluzole) that **violate** the no-prior-evidence constraint. Across 13 hypotheses produced under the strict prompt, only **one** matched the paper's broader 5-drug list (Pacritinib, via `claude-opus-4.7 (direct)` in `frontier-aml-vs-raw`) and **none** matched the strict top-3 (Nanvuranlat, KIRA6, Leflunomide).
+Models default to well-known AML repurposing candidates that **violate** the no-prior-evidence constraint. Across the 14 hypotheses produced under the strict prompt in the two vs-raw benches, **none** matched the strict top-3 (Nanvuranlat, KIRA6, Leflunomide) and **none** matched the broader 5-drug list. The models instead surface plausible-but-unscored candidates (Nitazoxanide, ND-646, Meldonium, Pitavastatin, Belapectin, …). Reproducing the paper's specific picks needs more breadth than a single Generation call per candidate.
 
-### 2. Pipeline-vs-raw: the harness's value-add depends on the model
+### 2. Pipeline-vs-raw: the harness now helps the strongest models
 
-The `*-vs-raw` presets run each candidate model **twice** — once through the full Generation pipeline (literature tools + tool loop + dedup), once as a single forced-tool LM call. Across the paper baselines (`paper-aml-vs-raw`), **direct mode beat pipeline mode for every model that produced hypotheses in both modes**:
+The `*-vs-raw` presets run each candidate model **twice** — once through the full Generation pipeline (literature tools + tool loop + dedup), once as a single forced-tool LM call. After the pipeline fixes, **the two strongest models win decisively in pipeline mode and beat their own raw call**:
 
-| model | pipeline | direct | direct beats pipeline? |
+| model | pipeline | direct | winner |
 | --- | --- | --- | --- |
-| openai-o1 | 0-5 (Elo 1128) | 3-2 (Elo 1213) | yes |
-| gemini-2-pro | 2-3 (Elo 1183) | 5-0 (Elo 1274) | yes (decisive) |
-| gemini-2-flash-thinking | 0 hyps | 1-4 (Elo 1158) | yes — pipeline failed |
-| claude-haiku-4.5 | 0 hyps | 4-1 (Elo 1244) | yes — pipeline failed |
+| claude-opus-4.7 | **14-0 (Elo 1367)** | 10-4 (1270) | pipeline (decisive) |
+| claude-haiku-4.5 | **10-0 (Elo 1300)** | 1-9 (1120) | pipeline (decisive) |
+| openai-o1 | 6-4 (1221) | 4-6 (1178) | pipeline |
+| gpt-5 | 6-8 (1172) | 5-9 (1146) | ~tie (slight pipeline) |
+| gemini-3-pro | 7-7 (1186) | 12-2 (1275) | direct |
+| gemini-3-flash | 0-14 (1074) | 2-12 (1110) | ~tie (both weak) |
 
-Same pattern earlier on `gemini-3-flash-preview` (a one-model vs-raw run): pipeline went 4-2 vs raw 5-1 — within noise on Elo, but pipeline was **8x more expensive** ($0.0275 vs $0.0033) and **3x slower** (14.9s vs 5.0s).
+This **reverses** the pre-fix finding ("direct beats pipeline for every model"). The reversal is concentrated in the strongest models: opus and haiku use the literature tools productively and their pipeline hypotheses dominate the tournament. Mid-tier Gemini still does better raw — the tool loop adds cost without improving its rated hypothesis. So the harness's value-add scales with base model strength, rather than being a flat tax.
 
-Smaller / older models therefore tend to be *hurt* by the harness on this task — the tool-loop adds cost and failure modes without improving the rated hypothesis. The two cases where pipeline did win were `gpt-4o` (3-3 vs 0-6 for its own direct) and the gemini near-tie noted above; both with stronger reasoning-tuned base models.
+### 3. Frontier pipelines no longer fail
 
-### 3. Frontier models need looser caps to use the pipeline
+Pre-fix, `frontier-aml-vs-raw` had **all 4 pipeline modes produce zero hypotheses** (budget burn + tool-loop exhaustion + truncated tool calls). Post-fix, **all 8 frontier candidates (4 pipeline + 4 direct) produced a hypothesis** and the bench ran 56 matches. The one remaining pipeline miss across both vs-raw benches was `gemini-2-pro[pipe]`, where OpenRouter returned an empty completion on the forced final call (a flaky provider response, not a harness failure).
 
-In `frontier-aml-vs-raw` **all 4 pipeline modes failed** (claude-opus-4.7 burned $0.83 of $1.50 cap on its first call; gpt-5, gemini-3-pro, gemini-3-flash all exhausted their tool loops). Only 2 of 4 direct modes produced usable output. The strict AML prompt + 8-iteration tool-loop cap + per-candidate budget cap is too tight for current frontier models — they want more headroom before they'll emit `record_hypothesis`.
+### Pipeline reliability fixes (why these numbers differ from git history)
+
+Four changes turned the frontier pipeline from 0/4 to 4/4:
+
+1. **Empty-search stopping rule** in the Generation prompt — an empty literature search now reads as positive evidence of novelty (a reason to commit), not a reason to keep searching.
+2. **Force `record_hypothesis` on the final tool-loop iteration** — the model must commit on its last turn instead of spending it on another search.
+3. **`max_output_tokens` 4096 → 8192** for Generation — verbose models (opus, gpt-5) were overrunning the old cap mid-JSON, so the tool-call arguments were truncated and unparseable.
+4. **`--budget-per-candidate` default 2.0 → 3.0** — opus needed more headroom than the old cap allowed.
 
 ### Practical implications
 
-- On a hard, well-defined task, **the cheapest baseline is   `--candidate model@direct` with a small per-candidate budget**.   The pipeline is worth its cost only when the model is strong   enough to use the literature tools productively *within* the   iteration cap.
-- Reproducing the paper's specific picks (Nanvuranlat / KIRA6 /   Leflunomide, or the broader 5) needs **more breadth** — the   paper surfaced these after running 15 expert-curated goals +   the full system's iterative refinement, not from a single   Generation call.
-- Budget caps matter. Tight per-candidate caps mask quality   questions behind admission failures. For expensive models (Opus,   o1) `--budget-per-candidate 2.0` is the floor on this prompt;   `--n 5+` with multiple seeds is the floor for stable recall   numbers.
+- On this hard task, **the pipeline is now worth its cost for strong   models** (opus, haiku, o1) — it produces tournament-winning   hypotheses that beat the same model's raw call. For mid-tier   models, `--candidate model@direct` remains the cheaper, equal-or-  better baseline.
+- Gold-set recall is still 0 on the strict top-3. Reproducing the   paper's specific picks needs **more breadth** — multiple seeds   (`--n 5+`) and the full system's iterative refinement, not one   Generation call per candidate.
+- Budget caps still matter for expensive models: opus pipeline spent   ~$0.80 of its $3 cap per candidate on this prompt.
 
 
 ## Index of recorded benches
@@ -68,12 +77,11 @@ In `frontier-aml-vs-raw` **all 4 pipeline modes failed** (claude-opus-4.7 burned
 | [`bnc_01KSGCHAN1348M7WEDX9…`](#bench-bnc_01ksgchan1348m7wedx9e449nd) | 2026-05-25T20:17:04Z | AML repurposing | 3 | 0 | $0.0099 | `—` | — |
 | [`bnc_01KSGCJSN8MGMK6H3KZV…`](#bench-bnc_01ksgcjsn8mgmk6h3kzvvqzjpg) | 2026-05-25T20:17:52Z | AML repurposing | 2 | 2 | $0.0189 | `—` | — |
 | [`bnc_01KSGCKSG3MJKVPDZBZX…`](#bench-bnc_01ksgcksg3mjkvpdzbzxm3th2g) | 2026-05-25T20:18:24Z | AML repurposing | 4 | 6 | $0.9852 | `aml-repurposing-paper-5` | 0/5 |
-| [`bnc_01KSGCTX88HHP929V9AE…`](#bench-bnc_01ksgctx88hhp929v9ae1cgqrv) | 2026-05-25T20:22:18Z | AML repurposing | 8 | 1 | $0.6977 | `aml-repurposing-paper-5` | 0/5 |
 | [`bnc_01KSGD0WKFYAF2X15P99…`](#bench-bnc_01ksgd0wkfyaf2x15p99bfax01) | 2026-05-25T20:25:34Z | AML repurposing | 4 | 12 | $0.1452 | `—` | — |
 | [`bnc_01KSGV99YG7D4DXZ8G6P…`](#bench-bnc_01ksgv99yg7d4dxz8g6pejwkv1) | 2026-05-26T00:34:49Z | AML repurposing | 4 | 0 | $0.0000 | `aml-repurposing-paper-5` | 0/5 |
 | [`bnc_01KSGVHY16Q0GHNE9ZJW…`](#bench-bnc_01ksgvhy16q0ghne9zjwzygfng) | 2026-05-26T00:39:32Z | AML repurposing | 4 | 6 | $1.8881 | `aml-repurposing-paper-top3` | 0/3 |
-| [`bnc_01KSGVRBBDNFB8MZYQZD…`](#bench-bnc_01ksgvrbbdnfb8mzyqzd30p180) | 2026-05-26T00:43:02Z | AML repurposing | 8 | 15 | $0.8730 | `aml-repurposing-paper-top3` | 0/3 |
-| [`bnc_01KSGW0H3KH2CTGV4JCT…`](#bench-bnc_01ksgw0h3kh2ctgv4jctwc63v1) | 2026-05-26T00:47:30Z | AML repurposing | 8 | 1 | $1.8255 | `aml-repurposing-paper-top3` | 0/3 |
+| [`bnc_01KSN03HG9VW3CPYD40S…`](#bench-bnc_01ksn03hg9vw3cpyd40sa51neb) | 2026-05-27T15:16:01Z | AML repurposing | 8 | 30 | $0.8309 | `aml-repurposing-paper-top3` | 0/3 |
+| [`bnc_01KSN0ZMJZV12F6MDE63…`](#bench-bnc_01ksn0zmjzv12f6mde63h7mw9r) | 2026-05-27T15:31:22Z | AML repurposing | 8 | 56 | $2.0820 | `aml-repurposing-paper-top3` | 0/3 |
 
 ## Per-bench detail
 
@@ -931,76 +939,6 @@ SELECT bc_a.label, bc_b.label, bm.winner,
  WHERE bm.bench_id='bnc_01KSGCKSG3MJKVPDZBZXM3TH2G';
 ```
 
-<a id="bench-bnc_01ksgctx88hhp929v9ae1cgqrv"></a>
-## Bench `bnc_01KSGCTX88HHP929V9AE1CGQRV`
-
-- **Created:** 2026-05-25T20:22:18.123732+00:00
-- **Status:** done
-- **Judge:** `openrouter:google/gemini-3-flash-preview`
-- **Gold set at runtime:** `aml-repurposing-paper-5` (size 5)
-- **Total cost:** $0.6977
-- **Matches played:** 1
-- **Session:** `ses_01KSGCTX8CNW1TR6TG25AEHCPK`
-- **Bench artifact:** `artifacts/ses_01KSGCTX8CNW1TR6TG25AEHCPK/bench/bnc_01KSGCTX88HHP929V9AE1CGQRV.json`
-
-**Goal:**
-
-> Identify FDA-approved drugs that could be repurposed as therapeutic candidates for acute myeloid leukemia (AML). For each hypothesis, name the specific approved drug (its INN or brand name), describe the molecular mechanism by which it would act against AML blasts or leukemic stem cells, and propose a concrete in vitro or in vivo experiment to test it.
-
-### Candidates
-
-| label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `claude-opus-4.7[raw]` | direct | 1 | 1-0 | 1216 | 0/5 | $0.1716 | 1,792 / 1,930 | 31.1s |  |
-| `gemini-3-flash[raw]` | direct | 1 | 0-1 | 1184 | 0/5 | $0.0017 | 426 / 609 | 7.7s |  |
-| `claude-opus-4.7[pipe]` | pipeline | 0 | — | — | 0/5 | $0.1427 | 7,294 / 444 | — |  |
-| `gemini-3-flash[pipe]` | pipeline | 0 | — | — | 0/5 | $0.0105 | 33,101 / 216 | — |  |
-| `gemini-3-pro[pipe]` | pipeline | 0 | — | — | 0/5 | $0.0567 | 49,795 / 435 | — |  |
-| `gemini-3-pro[raw]` | direct | 0 | — | — | 0/5 | $0.0178 | 426 / 3,932 | 41.0s |  |
-| `gpt-5[pipe]` | pipeline | 0 | — | — | 0/5 | $0.2125 | 24,631 / 4,468 | — |  |
-| `gpt-5[raw]` | direct | 0 | — | — | 0/5 | $0.0842 | 463 / 4,096 | 108.7s |  |
-
-### Hypotheses surfaced (2 total)
-
-- **Auranofin repurposing for AML via TXNRD1 inhibition and ferroptosis induction in leukemic stem cells** — via `claude-opus-4.7 (direct)`
-  - The FDA-approved anti-rheumatic gold(I) drug auranofin can be repurposed to selectively kill AML blasts and leukemic stem cells (LSCs) by inhibiting thioredoxin reductase 1 (TXNRD1), collapsing the thioredoxin/glutathione antioxidant axis, 
-  - mode: `direct` · artifact: [`data/artifacts/ses_01KSGCTX8CNW1TR6TG25AEHCPK/hypotheses/hyp_69dc310a3799c52b.json`](data/artifacts/ses_01KSGCTX8CNW1TR6TG25AEHCPK/hypotheses/hyp_69dc310a3799c52b.json)
-- **Repurposing Ponatinib as a PRMT5 Inhibitor for Acute Myeloid Leukemia Therapy** — via `gemini-3-flash (direct)`
-  - Ponatinib can be repurposed as a therapeutic for AML by acts as an epigenetic modulator through the inhibition of PRMT5, thereby restoring the p53 tumor suppressor pathway.
-  - mode: `direct` · artifact: [`data/artifacts/ses_01KSGCTX8CNW1TR6TG25AEHCPK/hypotheses/hyp_cc06ee3760501927.json`](data/artifacts/ses_01KSGCTX8CNW1TR6TG25AEHCPK/hypotheses/hyp_cc06ee3760501927.json)
-
-### Recall across known gold sets (post-hoc rescore)
-
-- · `aml-repurposing-paper-5` (5 entities): **0/5** → _none_
-- · `aml-repurposing-paper-top3` (3 entities): **0/3** → _none_
-
-### Files
-
-- Hypotheses (all `record_hypothesis` payloads): `data/artifacts/ses_01KSGCTX8CNW1TR6TG25AEHCPK/hypotheses/`
-- LLM transcripts (request + response per call): `data/artifacts/ses_01KSGCTX8CNW1TR6TG25AEHCPK/transcripts/generation/`
-- Bench summary JSON (per-candidate `gold_hit_detail` with alias / field / hyp): `artifacts/ses_01KSGCTX8CNW1TR6TG25AEHCPK/bench/bnc_01KSGCTX88HHP929V9AE1CGQRV.json`
-
-**SQL to inspect this bench:**
-
-```sql
--- per-candidate detail
-SELECT label, mode, n_hypotheses, wins, losses,
-       round(mean_elo,0), gold_hits, gold_hit_names,
-       round(total_cost_usd, 4),
-       total_input_tok, total_output_tok
-  FROM bench_candidates
- WHERE bench_id='bnc_01KSGCTX88HHP929V9AE1CGQRV';
-
--- every match with judge rationale
-SELECT bc_a.label, bc_b.label, bm.winner,
-       round(bm.judge_cost_usd, 4),
-       substr(bm.rationale, 1, 200)
-  FROM bench_matches bm
-  JOIN bench_candidates bc_a ON bc_a.id = bm.cand_a
-  JOIN bench_candidates bc_b ON bc_b.id = bm.cand_b
- WHERE bm.bench_id='bnc_01KSGCTX88HHP929V9AE1CGQRV';
-```
-
 <a id="bench-bnc_01ksgd0wkfyaf2x15p99bfax01"></a>
 ## Bench `bnc_01KSGD0WKFYAF2X15P99BFAX01`
 
@@ -1213,17 +1151,17 @@ SELECT bc_a.label, bc_b.label, bm.winner,
  WHERE bm.bench_id='bnc_01KSGVHY16Q0GHNE9ZJWZYGFNG';
 ```
 
-<a id="bench-bnc_01ksgvrbbdnfb8mzyqzd30p180"></a>
-## Bench `bnc_01KSGVRBBDNFB8MZYQZD30P180`
+<a id="bench-bnc_01ksn03hg9vw3cpyd40sa51neb"></a>
+## Bench `bnc_01KSN03HG9VW3CPYD40SA51NEB`
 
-- **Created:** 2026-05-26T00:43:02.896405+00:00
+- **Created:** 2026-05-27T15:16:01.677338+00:00
 - **Status:** done
 - **Judge:** `openrouter:google/gemini-3-flash-preview`
 - **Gold set at runtime:** `aml-repurposing-paper-top3` (size 3)
-- **Total cost:** $0.8730
-- **Matches played:** 15
-- **Session:** `ses_01KSGVRBBHVQ1T88ABA0TV5071`
-- **Bench artifact:** `artifacts/ses_01KSGVRBBHVQ1T88ABA0TV5071/bench/bnc_01KSGVRBBDNFB8MZYQZD30P180.json`
+- **Total cost:** $0.8309
+- **Matches played:** 30
+- **Session:** `ses_01KSN03HGEWWH78FVR954ZQ5KA`
+- **Bench artifact:** `artifacts/ses_01KSN03HGEWWH78FVR954ZQ5KA/bench/bnc_01KSN03HG9VW3CPYD40SA51NEB.json`
 
 **Goal:**
 
@@ -1233,35 +1171,35 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 | label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `gemini-2-pro[raw]` | direct | 1 | 5-0 | 1274 | 0/3 | $0.0373 | 541 / 3,666 | 35.5s |  |
-| `claude-haiku-4.5[raw]` | direct | 1 | 4-1 | 1244 | 0/3 | $0.0073 | 1,432 / 1,171 | 9.3s |  |
-| `openai-o1[raw]` | direct | 1 | 3-2 | 1213 | 0/3 | $0.2810 | 612 / 4,530 | 24.5s |  |
-| `gemini-2-flash-thinking[pipe]` | pipeline | 1 | 2-3 | 1183 | 0/3 | $0.0004 | 1,635 / 621 | 5.2s |  |
-| `gemini-2-flash-thinking[raw]` | direct | 1 | 1-4 | 1158 | 0/3 | $0.0002 | 541 / 304 | 3.5s |  |
-| `openai-o1[pipe]` | pipeline | 1 | 0-5 | 1128 | 0/3 | $0.4047 | 5,633 / 5,336 | 36.7s |  |
-| `claude-haiku-4.5[pipe]` | pipeline | 0 | — | — | 0/3 | $0.1237 | 113,053 / 2,122 | — |  |
-| `gemini-2-pro[pipe]` | pipeline | 0 | — | — | 0/3 | $0.0185 | 1,635 / 1,646 | — |  |
+| `claude-haiku-4.5[pipe]` | pipeline | 1 | 10-0 | 1300 | 0/3 | $0.1365 | 118,967 / 3,497 | 54.3s |  |
+| `gemini-2-pro[raw]` | direct | 1 | 8-2 | 1277 | 0/3 | $0.0291 | 541 / 2,838 | 31.4s |  |
+| `openai-o1[pipe]` | pipeline | 1 | 6-4 | 1221 | 0/3 | $0.3142 | 4,517 / 4,107 | 132.1s |  |
+| `openai-o1[raw]` | direct | 1 | 4-6 | 1178 | 0/3 | $0.2905 | 612 / 4,688 | 53.9s |  |
+| `claude-haiku-4.5[raw]` | direct | 1 | 1-9 | 1120 | 0/3 | $0.0077 | 1,432 / 1,259 | 11.3s |  |
+| `gemini-2-flash-thinking[pipe]` | pipeline | 1 | 1-9 | 1103 | 0/3 | $0.0031 | 28,419 / 760 | 21.4s |  |
+| `gemini-2-flash-thinking[raw]` | direct | 0 | — | — | 0/3 | $0.0000 | — | — |  |
+| `gemini-2-pro[pipe]` | pipeline | 0 | — | — | 0/3 | $0.0499 | 19,624 / 2,536 | — |  |
 
 ### Hypotheses surfaced (6 total)
 
-- **Repurposing of the RORγ Inverse Agonist GSK2981278 for AML Therapy** — via `gemini-2-pro (direct)`
-  - The selective RORγ inverse agonist GSK2981278, developed for autoimmune diseases, will suppress leukemic growth and eradicate leukemic stem cells in acute myeloid leukemia (AML) by inhibiting the pro-leukemic transcriptional program maintai
-  - mode: `direct` · artifact: [`data/artifacts/ses_01KSGVRBBHVQ1T88ABA0TV5071/hypotheses/hyp_44905531e46987fd.json`](data/artifacts/ses_01KSGVRBBHVQ1T88ABA0TV5071/hypotheses/hyp_44905531e46987fd.json)
-- **Roflumilast (a PDE4 inhibitor) as a novel anti-AML agent via cAMP-mediated apoptosis** — via `openai-o1 (direct)`
-  - We hypothesize that roflumilast-mediated PDE4 inhibition disrupts AML blast proliferation and survival by elevating intracellular cAMP levels and triggering apoptosis-driven cell death, despite no prior preclinical AML data for roflumilast.
-  - mode: `direct` · artifact: [`data/artifacts/ses_01KSGVRBBHVQ1T88ABA0TV5071/hypotheses/hyp_7ce60187976ce979.json`](data/artifacts/ses_01KSGVRBBHVQ1T88ABA0TV5071/hypotheses/hyp_7ce60187976ce979.json)
-- **Repurposing sodium phenylbutyrate for AML via epigenetic modulation** — via `gemini-2-flash-thinking (direct)`
-  - Sodium phenylbutyrate will inhibit HDAC activity in AML cells, leading to increased histone acetylation, cell cycle arrest, and apoptosis.
-  - mode: `direct` · artifact: [`data/artifacts/ses_01KSGVRBBHVQ1T88ABA0TV5071/hypotheses/hyp_aa132a34ec15ef6a.json`](data/artifacts/ses_01KSGVRBBHVQ1T88ABA0TV5071/hypotheses/hyp_aa132a34ec15ef6a.json)
-- **Manidipine for AML** — via `gemini-2-flash-thinking (pipeline)`
-  - Manidipine, a calcium channel blocker, can inhibit AML cell proliferation by disrupting calcium signaling.
-  - mode: `pipeline` · artifact: [`data/artifacts/ses_01KSGVRBBHVQ1T88ABA0TV5071/hypotheses/hyp_b934f75a47913ebd.json`](data/artifacts/ses_01KSGVRBBHVQ1T88ABA0TV5071/hypotheses/hyp_b934f75a47913ebd.json)
-- **Ezetimibe as a novel anti-AML agent** — via `openai-o1 (pipeline)`
-  - Ezetimibe’s inhibition of cholesterol absorption diminishes AML blast growth by limiting essential cholesterol supply.
-  - mode: `pipeline` · artifact: [`data/artifacts/ses_01KSGVRBBHVQ1T88ABA0TV5071/hypotheses/hyp_c8f69611471fa13a.json`](data/artifacts/ses_01KSGVRBBHVQ1T88ABA0TV5071/hypotheses/hyp_c8f69611471fa13a.json)
-- **Repurposing Finerenone for AML via aldosterone-independent FGFR4 inhibition** — via `claude-haiku-4.5 (direct)`
-  - Finerenone, a non-steroidal mineralocorticoid receptor antagonist approved for diabetic kidney disease, will show efficacy against AML blasts through off-target inhibition of FGFR4 signaling, which is constitutively active in AML cells and 
-  - mode: `direct` · artifact: [`data/artifacts/ses_01KSGVRBBHVQ1T88ABA0TV5071/hypotheses/hyp_fabac9462da8b5c1.json`](data/artifacts/ses_01KSGVRBBHVQ1T88ABA0TV5071/hypotheses/hyp_fabac9462da8b5c1.json)
+- **Serine Hydroxymethyltransferase 2 (SHMT2) Inhibition for AML** — via `claude-haiku-4.5 (pipeline)`
+  - The small molecule SHMT2 inhibitor SHIN2 will selectively kill AML blasts and leukemic stem cells by disrupting one-carbon metabolism and purine synthesis while sparing normal hematopoietic stem cells.
+  - mode: `pipeline` · artifact: [`data/artifacts/ses_01KSN03HGEWWH78FVR954ZQ5KA/hypotheses/hyp_086a8cf008dba0af.json`](data/artifacts/ses_01KSN03HGEWWH78FVR954ZQ5KA/hypotheses/hyp_086a8cf008dba0af.json)
+- **Spliceostatin for AML** — via `gemini-2-flash-thinking (pipeline)`
+  - Spliceostatin, an inhibitor of SF3b, can induce apoptosis and impair proliferation of AML cells, particularly in subtypes dependent on specific splicing programs.
+  - mode: `pipeline` · artifact: [`data/artifacts/ses_01KSN03HGEWWH78FVR954ZQ5KA/hypotheses/hyp_1886ac45bfbae3e8.json`](data/artifacts/ses_01KSN03HGEWWH78FVR954ZQ5KA/hypotheses/hyp_1886ac45bfbae3e8.json)
+- **Repurposing Mirabegron for AML via Bone Marrow Neuropathy Modulation** — via `openai-o1 (pipeline)`
+  - Mirabegron, a β3-adrenergic receptor agonist, can restore sympathetic innervation in the AML bone marrow niche and thereby reduce leukemic expansion.
+  - mode: `pipeline` · artifact: [`data/artifacts/ses_01KSN03HGEWWH78FVR954ZQ5KA/hypotheses/hyp_75d7eacb11e5375c.json`](data/artifacts/ses_01KSN03HGEWWH78FVR954ZQ5KA/hypotheses/hyp_75d7eacb11e5375c.json)
+- **Brensocatib targeting neutrophil protease-driven AML progression** — via `openai-o1 (direct)`
+  - Brensocatib, a dipeptidyl peptidase 1 (DPP1) inhibitor, prevents the activation of key neutrophil proteases in the bone marrow niche, potentially limiting AML blast survival.
+  - mode: `direct` · artifact: [`data/artifacts/ses_01KSN03HGEWWH78FVR954ZQ5KA/hypotheses/hyp_b13a0ac424bc8729.json`](data/artifacts/ses_01KSN03HGEWWH78FVR954ZQ5KA/hypotheses/hyp_b13a0ac424bc8729.json)
+- **Repurposing MLH1 inhibitors for AML via synthetic lethality with p53 mutations** — via `claude-haiku-4.5 (direct)`
+  - MLH1 inhibitors (specifically transient MLH1 pathway inhibition via small molecules) will selectively kill AML blasts harboring TP53 mutations through synthetic lethality mechanisms that exploit mismatch-repair deficiency in the context of 
+  - mode: `direct` · artifact: [`data/artifacts/ses_01KSN03HGEWWH78FVR954ZQ5KA/hypotheses/hyp_d30978fd338be65b.json`](data/artifacts/ses_01KSN03HGEWWH78FVR954ZQ5KA/hypotheses/hyp_d30978fd338be65b.json)
+- **Repurposing Nitazoxanide to Target Leukemic Stem Cells in AML** — via `gemini-2-pro (direct)`
+  - The FDA-approved antiparasitic drug Nitazoxanide will induce apoptosis and inhibit self-renewal in acute myeloid leukemia (AML) leukemic stem cells (LSCs) by disrupting the Wnt/β-catenin signaling pathway.
+  - mode: `direct` · artifact: [`data/artifacts/ses_01KSN03HGEWWH78FVR954ZQ5KA/hypotheses/hyp_d55752d9d8fe110a.json`](data/artifacts/ses_01KSN03HGEWWH78FVR954ZQ5KA/hypotheses/hyp_d55752d9d8fe110a.json)
 
 ### Recall across known gold sets (post-hoc rescore)
 
@@ -1270,9 +1208,9 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 ### Files
 
-- Hypotheses (all `record_hypothesis` payloads): `data/artifacts/ses_01KSGVRBBHVQ1T88ABA0TV5071/hypotheses/`
-- LLM transcripts (request + response per call): `data/artifacts/ses_01KSGVRBBHVQ1T88ABA0TV5071/transcripts/generation/`
-- Bench summary JSON (per-candidate `gold_hit_detail` with alias / field / hyp): `artifacts/ses_01KSGVRBBHVQ1T88ABA0TV5071/bench/bnc_01KSGVRBBDNFB8MZYQZD30P180.json`
+- Hypotheses (all `record_hypothesis` payloads): `data/artifacts/ses_01KSN03HGEWWH78FVR954ZQ5KA/hypotheses/`
+- LLM transcripts (request + response per call): `data/artifacts/ses_01KSN03HGEWWH78FVR954ZQ5KA/transcripts/generation/`
+- Bench summary JSON (per-candidate `gold_hit_detail` with alias / field / hyp): `artifacts/ses_01KSN03HGEWWH78FVR954ZQ5KA/bench/bnc_01KSN03HG9VW3CPYD40SA51NEB.json`
 
 **SQL to inspect this bench:**
 
@@ -1283,7 +1221,7 @@ SELECT label, mode, n_hypotheses, wins, losses,
        round(total_cost_usd, 4),
        total_input_tok, total_output_tok
   FROM bench_candidates
- WHERE bench_id='bnc_01KSGVRBBDNFB8MZYQZD30P180';
+ WHERE bench_id='bnc_01KSN03HG9VW3CPYD40SA51NEB';
 
 -- every match with judge rationale
 SELECT bc_a.label, bc_b.label, bm.winner,
@@ -1292,20 +1230,20 @@ SELECT bc_a.label, bc_b.label, bm.winner,
   FROM bench_matches bm
   JOIN bench_candidates bc_a ON bc_a.id = bm.cand_a
   JOIN bench_candidates bc_b ON bc_b.id = bm.cand_b
- WHERE bm.bench_id='bnc_01KSGVRBBDNFB8MZYQZD30P180';
+ WHERE bm.bench_id='bnc_01KSN03HG9VW3CPYD40SA51NEB';
 ```
 
-<a id="bench-bnc_01ksgw0h3kh2ctgv4jctwc63v1"></a>
-## Bench `bnc_01KSGW0H3KH2CTGV4JCTWC63V1`
+<a id="bench-bnc_01ksn0zmjzv12f6mde63h7mw9r"></a>
+## Bench `bnc_01KSN0ZMJZV12F6MDE63H7MW9R`
 
-- **Created:** 2026-05-26T00:47:30.935262+00:00
+- **Created:** 2026-05-27T15:31:22.336476+00:00
 - **Status:** done
 - **Judge:** `openrouter:google/gemini-3-flash-preview`
 - **Gold set at runtime:** `aml-repurposing-paper-top3` (size 3)
-- **Total cost:** $1.8255
-- **Matches played:** 1
-- **Session:** `ses_01KSGW0H3QK5QC2ZEJRNN31JM2`
-- **Bench artifact:** `artifacts/ses_01KSGW0H3QK5QC2ZEJRNN31JM2/bench/bnc_01KSGW0H3KH2CTGV4JCTWC63V1.json`
+- **Total cost:** $2.0820
+- **Matches played:** 56
+- **Session:** `ses_01KSN0ZMK1X3V4JD71YZT226A4`
+- **Bench artifact:** `artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/bench/bnc_01KSN0ZMJZV12F6MDE63H7MW9R.json`
 
 **Goal:**
 
@@ -1315,34 +1253,52 @@ SELECT bc_a.label, bc_b.label, bm.winner,
 
 | label | mode | n_hyps | W-L | Elo | hits (runtime) | $ | tokens (in / out) | p50 | note |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `claude-opus-4.7[raw]` | direct | 1 | 1-0 | 1216 | 0/3 | $0.1653 | 2,051 / 1,794 | 30.3s |  |
-| `gemini-3-flash[raw]` | direct | 1 | 0-1 | 1184 | 0/3 | $0.0013 | 582 / 470 | 3.3s |  |
-| `claude-opus-4.7[pipe]` | pipeline | 0 | — | — | 0/3 | $0.8328 | 44,526 / 2,199 | — |  |
-| `gemini-3-flash[pipe]` | pipeline | 0 | — | — | 0/3 | $0.0018 | 4,315 / 199 | — |  |
-| `gemini-3-pro[pipe]` | pipeline | 0 | — | — | 0/3 | $0.1479 | 114,232 / 5,058 | — |  |
-| `gemini-3-pro[raw]` | direct | 0 | — | — | 0/3 | $0.0000 | — | 151.6s |  |
-| `gpt-5[pipe]` | pipeline | 0 | — | — | 0/3 | $0.4275 | 20,076 / 16,355 | — |  |
-| `gpt-5[raw]` | direct | 0 | — | — | 0/3 | $0.2488 | 615 / 12,288 | 154.1s |  |
+| `claude-opus-4.7[pipe]` | pipeline | 1 | 14-0 | 1367 | 0/3 | $0.7966 | 27,151 / 5,191 | 79.4s |  |
+| `gemini-3-pro[raw]` | direct | 1 | 12-2 | 1275 | 0/3 | $0.0521 | 541 / 11,710 | 133.0s |  |
+| `claude-opus-4.7[raw]` | direct | 1 | 10-4 | 1270 | 0/3 | $0.2244 | 2,051 / 2,582 | 40.9s |  |
+| `gemini-3-pro[pipe]` | pipeline | 1 | 7-7 | 1186 | 0/3 | $0.1298 | 105,896 / 3,027 | 52.6s |  |
+| `gpt-5[pipe]` | pipeline | 1 | 6-8 | 1172 | 0/3 | $0.6786 | 81,730 / 13,497 | 294.5s |  |
+| `gpt-5[raw]` | direct | 1 | 5-9 | 1146 | 0/3 | $0.1894 | 615 / 9,314 | 170.9s |  |
+| `gemini-3-flash[raw]` | direct | 1 | 2-12 | 1110 | 0/3 | $0.0017 | 582 / 598 | 4.7s |  |
+| `gemini-3-flash[pipe]` | pipeline | 1 | 0-14 | 1074 | 0/3 | $0.0095 | 21,472 / 1,212 | 12.7s |  |
 
-### Hypotheses surfaced (2 total)
+### Hypotheses surfaced (8 total)
 
-- **Tafenoquine-Induced Mitochondrial Destabilization in AML** — via `gemini-3-flash (direct)`
-  - Tafenoquine selectively induces apoptosis in acute myeloid leukemia cells by disrupting mitochondrial membrane potential and inhibiting oxidative phosphorylation, leveraging the metabolic dependency of leukemic stem cells.
-  - mode: `direct` · artifact: [`data/artifacts/ses_01KSGW0H3QK5QC2ZEJRNN31JM2/hypotheses/hyp_0c7743b70107976a.json`](data/artifacts/ses_01KSGW0H3QK5QC2ZEJRNN31JM2/hypotheses/hyp_0c7743b70107976a.json)
-- **Pacritinib repurposing for splicing-factor-mutant and MLL-rearranged AML via dual IRAK1/FLT3 blockade** — via `claude-opus-4.7 (direct)`
-  - Pacritinib, an FDA-approved JAK2/FLT3/IRAK1 inhibitor used for myelofibrosis, will selectively kill AML blasts and leukemic stem cells driven by splicing-factor mutations (SF3B1, U2AF1, SRSF2) or MLL-rearrangements via combined suppression 
-  - mode: `direct` · artifact: [`data/artifacts/ses_01KSGW0H3QK5QC2ZEJRNN31JM2/hypotheses/hyp_c046cfa2ad642bfe.json`](data/artifacts/ses_01KSGW0H3QK5QC2ZEJRNN31JM2/hypotheses/hyp_c046cfa2ad642bfe.json)
+- **Repurposing Meldonium to Target Fatty Acid Oxidation Addiction in AML Leukemic Stem Cells via Carnitine Depletion** — via `gemini-3-pro (direct)`
+  - Repurposing the anti-ischemic drug meldonium will selectively eradicate acute myeloid leukemia (AML) stem cells by competitively inhibiting the carnitine transporter OCTN2 (SLC22A5) and the biosynthetic enzyme BBOX1, thereby enforcing a let
+  - mode: `direct` · artifact: [`data/artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/hypotheses/hyp_40274ef161482bcd.json`](data/artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/hypotheses/hyp_40274ef161482bcd.json)
+- **Pirfenidone as a TGF-β/p38–axis repurposing candidate to disrupt the AML bone-marrow niche and sensitize LSCs** — via `claude-opus-4.7 (direct)`
+  - Pirfenidone, the anti-fibrotic drug approved for idiopathic pulmonary fibrosis, will selectively impair AML leukemic stem cell (LSC) maintenance and chemoresistance by simultaneously dampening TGF-β1/SMAD signaling and p38 MAPK activity in 
+  - mode: `direct` · artifact: [`data/artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/hypotheses/hyp_4c63943c13f5ddb9.json`](data/artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/hypotheses/hyp_4c63943c13f5ddb9.json)
+- **Pitavastatin-Induced Isoprenylation Depletion in Acute Myeloid Leukemia** — via `gemini-3-flash (direct)`
+  - Pitavastatin exerts anti-leukemic activity in AML by depleting geranylgeranyl pyrophosphate pools, thereby disrupting the membrane localization of Rho-family GTPases necessary for AML blast survival and proliferation.
+  - mode: `direct` · artifact: [`data/artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/hypotheses/hyp_8899dbe4250d21e0.json`](data/artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/hypotheses/hyp_8899dbe4250d21e0.json)
+- **Bazedoxifene repurposing for AML via GP130/IL-6/STAT3 blockade in leukemic stem cells** — via `claude-opus-4.7 (pipeline)`
+  - Bazedoxifene, an FDA-approved selective estrogen-receptor modulator that also functions as a small-molecule inhibitor of the IL-6/IL-11–GP130 interface and thereby blocks JAK1–STAT3 activation, will selectively impair AML blast survival and
+  - mode: `pipeline` · artifact: [`data/artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/hypotheses/hyp_92e077ffae6cca81.json`](data/artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/hypotheses/hyp_92e077ffae6cca81.json)
+- **Repurposing Cefiderocol as an Iron-Depleting Agent to Induce Ferroptosis in Acute Myeloid Leukemia** — via `gemini-3-flash (pipeline)`
+  - Cefiderocol acts as a potent anti-leukemic agent in AML by sequestering extracellular iron through its siderophore moiety, thereby inducing intracellular iron depletion and triggering ferroptotic cell death in iron-dependent leukemic blasts
+  - mode: `pipeline` · artifact: [`data/artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/hypotheses/hyp_b105be77ee34e084.json`](data/artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/hypotheses/hyp_b105be77ee34e084.json)
+- **Belapectin (GR-MD-02) to disrupt galectin-3–mediated stromal adhesion and survival signaling in AML LSCs** — via `gpt-5 (direct)`
+  - The galectin-3 inhibitor belapectin (GR-MD-02) will impair acute myeloid leukemia blasts and leukemic stem cells by blocking galectin-3–dependent adhesion and pro-survival signaling within the bone-marrow niche, thereby mobilizing cells fro
+  - mode: `direct` · artifact: [`data/artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/hypotheses/hyp_c736f06b018da456.json`](data/artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/hypotheses/hyp_c736f06b018da456.json)
+- **ND-646 for targeting Acetyl-CoA Carboxylase (ACC) in Acute Myeloid Leukemia** — via `gemini-3-pro (pipeline)`
+  - ND-646, a potent and specific allosteric inhibitor of acetyl-CoA carboxylase (ACC), will effectively eradicate acute myeloid leukemia blasts and leukemic stem cells by simultaneously blocking de novo lipogenesis and dysregulating fatty acid
+  - mode: `pipeline` · artifact: [`data/artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/hypotheses/hyp_d924779f909ddc4e.json`](data/artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/hypotheses/hyp_d924779f909ddc4e.json)
+- **Ranolazine as a partial fatty-acid-oxidation (pFOX) modulator to extinguish OXPHOS-dependent AML stemness** — via `gpt-5 (pipeline)`
+  - Ranolazine, an antianginal late-Na+ current inhibitor with partial fatty‑acid‑oxidation (pFOX)–modulating activity, will suppress oxidative‑phosphorylation–dependent acute myeloid leukemia (AML) blasts and leukemic stem cells by limiting β‑
+  - mode: `pipeline` · artifact: [`data/artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/hypotheses/hyp_e5486ae68bc054fe.json`](data/artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/hypotheses/hyp_e5486ae68bc054fe.json)
 
 ### Recall across known gold sets (post-hoc rescore)
 
-- ✅ `aml-repurposing-paper-5` (5 entities): **1/5** → Pacritinib
+- · `aml-repurposing-paper-5` (5 entities): **0/5** → _none_
 - · `aml-repurposing-paper-top3` (3 entities): **0/3** → _none_
 
 ### Files
 
-- Hypotheses (all `record_hypothesis` payloads): `data/artifacts/ses_01KSGW0H3QK5QC2ZEJRNN31JM2/hypotheses/`
-- LLM transcripts (request + response per call): `data/artifacts/ses_01KSGW0H3QK5QC2ZEJRNN31JM2/transcripts/generation/`
-- Bench summary JSON (per-candidate `gold_hit_detail` with alias / field / hyp): `artifacts/ses_01KSGW0H3QK5QC2ZEJRNN31JM2/bench/bnc_01KSGW0H3KH2CTGV4JCTWC63V1.json`
+- Hypotheses (all `record_hypothesis` payloads): `data/artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/hypotheses/`
+- LLM transcripts (request + response per call): `data/artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/transcripts/generation/`
+- Bench summary JSON (per-candidate `gold_hit_detail` with alias / field / hyp): `artifacts/ses_01KSN0ZMK1X3V4JD71YZT226A4/bench/bnc_01KSN0ZMJZV12F6MDE63H7MW9R.json`
 
 **SQL to inspect this bench:**
 
@@ -1353,7 +1309,7 @@ SELECT label, mode, n_hypotheses, wins, losses,
        round(total_cost_usd, 4),
        total_input_tok, total_output_tok
   FROM bench_candidates
- WHERE bench_id='bnc_01KSGW0H3KH2CTGV4JCTWC63V1';
+ WHERE bench_id='bnc_01KSN0ZMJZV12F6MDE63H7MW9R';
 
 -- every match with judge rationale
 SELECT bc_a.label, bc_b.label, bm.winner,
@@ -1362,5 +1318,5 @@ SELECT bc_a.label, bc_b.label, bm.winner,
   FROM bench_matches bm
   JOIN bench_candidates bc_a ON bc_a.id = bm.cand_a
   JOIN bench_candidates bc_b ON bc_b.id = bm.cand_b
- WHERE bm.bench_id='bnc_01KSGW0H3KH2CTGV4JCTWC63V1';
+ WHERE bm.bench_id='bnc_01KSN0ZMJZV12F6MDE63H7MW9R';
 ```

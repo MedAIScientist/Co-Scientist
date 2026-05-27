@@ -447,7 +447,7 @@ def bench_cmd(
         ),
     ),
     budget_per_candidate: float = typer.Option(
-        2.0, "--budget-per-candidate", help="USD cap per candidate."
+        3.0, "--budget-per-candidate", help="USD cap per candidate."
     ),
     judge_budget: float = typer.Option(
         5.0, "--judge-budget", help="USD cap for all judge calls combined."
