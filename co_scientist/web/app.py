@@ -168,7 +168,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
                 raise HTTPException(status_code=404, detail="overview unavailable") from e
             if not path.is_file():
                 raise HTTPException(status_code=404, detail="overview missing on disk")
-            overview_md = path.read_text()
+            overview_md = path.read_text(encoding="utf-8")
             return TEMPLATES.TemplateResponse(
                 request,
                 "overview.html",

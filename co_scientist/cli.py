@@ -219,7 +219,7 @@ def run(
     if est.warning:
         console.print(f"[yellow]{est.warning}[/yellow]")
 
-    prefs = preferences_file.read_text() if preferences_file else None
+    prefs = preferences_file.read_text(encoding="utf-8") if preferences_file else None
     from .agents.supervisor import Supervisor
 
     sup = Supervisor(cfg)
@@ -353,7 +353,7 @@ def report(
     if p is None:
         console.print(f"[red]No final overview yet for {session_id}[/red]")
         raise typer.Exit(1)
-    text = p.read_text()
+    text = p.read_text(encoding="utf-8")
     if format == "json":
         console.print_json(data={"session_id": session_id, "path": str(p), "content": text})
     else:
