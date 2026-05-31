@@ -132,37 +132,43 @@ co-scientist tools list       # show every registered tool the agents can call
 
 The agents are provider-agnostic — every agent talks to one LLM provider per session, picked in [`config/default.toml`](config/default.toml) (override with your own `co-scientist.toml`). Any of the providers below works; pick whichever you have a key for.
 
-Config is **deep-merged** over [`config/default.toml`](config/default.toml), whose `[models]` defaults are Claude model ids. So if you switch `provider` away from `anthropic`, override **every** key in `[models]` — any key you leave out keeps its Claude default and will be sent to your new provider, which will reject it. A complete OpenAI example:
+Config is **deep-merged** over [`config/default.toml`](config/default.toml), whose `[models]` defaults are Claude model ids. So if you switch `provider` away from `anthropic`, override **every** key in `[models]` — any key you leave out keeps its Claude default and will be sent to your new provider, which will reject it. Fill in model ids your chosen provider exposes (see the provider table below for examples per vendor):
 
 ```toml
 [llm]
-provider = "openai"          # or anthropic / openrouter / gemini / groq / together / mistral / ollama / openai_compatible
+# Pick one. See the provider table below.
+provider = "openai"   # anthropic | openai | openrouter | gemini | google | groq | together | mistral | ollama | openai_compatible
 
 [models]
-parse_goal          = "gpt-4o-mini"
-generation          = "gpt-5"
-reflection          = "gpt-5"
-evolution           = "gpt-5"
-ranking_pairwise    = "gpt-4o"
-ranking_debate      = "gpt-4o"
-ranking_priority    = "gpt-5"
-metareview_feedback = "gpt-4o"
-metareview_final    = "gpt-5"
-classifier          = "gpt-4o-mini"
-judge               = "gpt-4o"
+# Override ALL of these with model ids from your chosen provider.
+# (Two tiers are enough: a stronger model for reasoning-heavy agents and a
+#  cheaper one for the rest — set them to whatever your provider offers.)
+parse_goal          = "<cheap-model>"
+generation          = "<strong-model>"
+reflection          = "<strong-model>"
+evolution           = "<strong-model>"
+ranking_pairwise    = "<cheap-model>"
+ranking_debate      = "<strong-model>"
+ranking_priority    = "<strong-model>"
+metareview_feedback = "<cheap-model>"
+metareview_final    = "<strong-model>"
+classifier          = "<cheap-model>"
+judge               = "<cheap-model>"
 ```
+
+Providers are listed alphabetically — none is preferred; pick whichever you have a key for.
 
 | provider              | Endpoint                                                | Required key            | Example models                                            |
 | --------------------- | ------------------------------------------------------- | ----------------------- | --------------------------------------------------------- |
-| `openai`              | api.openai.com                                          | `OPENAI_API_KEY`        | `gpt-5`, `gpt-4o`, `o3-mini`                              |
 | `anthropic`           | api.anthropic.com                                       | `ANTHROPIC_API_KEY`     | `claude-opus-4-7`, `claude-sonnet-4-6`                    |
-| `openrouter`          | openrouter.ai — 200+ models from every major vendor     | `OPENROUTER_API_KEY`    | `openai/gpt-5`, `google/gemini-2.5-pro`, `anthropic/claude-3.5-sonnet`, `meta-llama/llama-3.3-70b-instruct` |
 | `gemini` / `google`   | generativelanguage.googleapis.com (OpenAI-compat)       | `GEMINI_API_KEY`        | `gemini-2.5-pro`, `gemini-2.5-flash`                      |
 | `groq`                | api.groq.com                                            | `GROQ_API_KEY`          | `llama-3.3-70b-versatile`, `mixtral-8x7b-32768`           |
-| `together`            | api.together.xyz                                        | `TOGETHER_API_KEY`      | `meta-llama/Llama-3.3-70B-Instruct-Turbo`                 |
 | `mistral`             | api.mistral.ai                                          | `MISTRAL_API_KEY`       | `mistral-large-latest`, `codestral-latest`                |
 | `ollama`              | localhost:11434 — local models                          | *(none)*                | `llama3.3:70b`, `qwen2.5:32b`                             |
+| `openai`              | api.openai.com                                          | `OPENAI_API_KEY`        | `gpt-5`, `gpt-4o`, `o3-mini`                              |
 | `openai_compatible`   | Anything else; set `[llm.openai] base_url` explicitly   | `OPENAI_API_KEY`        | depends                                                   |
+| `openrouter`          | openrouter.ai — 200+ models from every major vendor     | `OPENROUTER_API_KEY`    | `openai/gpt-5`, `google/gemini-2.5-pro`, `anthropic/claude-3.5-sonnet`, `meta-llama/llama-3.3-70b-instruct` |
+| `together`            | api.together.xyz                                        | `TOGETHER_API_KEY`      | `meta-llama/Llama-3.3-70B-Instruct-Turbo`                 |
 
 Mixing vendors per session requires picking the provider once; for multi-vendor routing in a single session, use `provider = "openrouter"` and let OpenRouter dispatch upstream per model:
 
@@ -184,14 +190,16 @@ Any per-agent model can point at any vendor — the example above just mixes fou
 
 Cost is estimated via `co_scientist/llm/routing.py`'s `PRICE_TABLE`; unknown models match a family-hint (flash / mini / opus / sonnet / gemini / llama / mistral) so brand-new previews price sensibly. Tighten `[run] budget_usd` if running on a new model you haven't sanity-checked.
 
-**Provider feature support:**
+**Provider feature support.** All providers run the full agent pipeline; these are the optional, vendor-specific accelerators. Anything not supported is transparently skipped, never an error:
 
-| Feature              | anthropic | openai (o-series) | openai (gpt) | openai_compatible |
-| -------------------- | --------- | ----------------- | ------------ | ----------------- |
-| Tool / function call | ✅        | ✅                | ✅           | depends on endpoint |
-| Extended reasoning   | ✅ (thinking) | ✅ (`reasoning_effort`) | ❌ (dropped) | endpoint-specific |
-| Prompt-cache breakpoints | ✅    | ❌                | ❌           | ❌                |
-| Batch API (50%-off ranking) | ✅ | ❌            | ❌           | ❌                |
+| Feature                     | `anthropic` | everything else (OpenAI + all OpenAI-compatible providers) |
+| --------------------------- | ----------- | ---------------------------------------------------------- |
+| Tool / function call        | ✅          | ✅ (native OpenAI; on other endpoints, depends on the endpoint) |
+| Extended reasoning          | ✅ via `thinking` budgets | ✅ via `reasoning_effort`, **only for reasoning models** — the model id must start with `o1`/`o3`/`o4` or contain `reasoning`; for any other model (e.g. `gpt-4o`) the thinking budget is dropped |
+| Prompt-cache breakpoints    | ✅          | ❌ (stripped before sending)                               |
+| Batch API (50%-off ranking) | ✅          | ❌ (Anthropic-only; other providers run all matches synchronously) |
+
+> Note: the reasoning-model check is a name heuristic ([`openai_client.py`](co_scientist/llm/openai_client.py) `_is_reasoning_model`). Newer reasoning-capable models whose ids don't match the pattern (e.g. `gpt-5`) won't get `reasoning_effort` until the heuristic is updated — they still work, just without an explicit reasoning budget.
 
 ## Configuration
 
