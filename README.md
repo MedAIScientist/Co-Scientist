@@ -130,18 +130,23 @@ co-scientist tools list       # show every registered tool the agents can call
 
 ## LLM provider
 
-The agents talk to one LLM provider per session, configured in [`config/default.toml`](config/default.toml) (override with your own `co-scientist.toml`):
+The agents are provider-agnostic — every agent talks to one LLM provider per session, picked in [`config/default.toml`](config/default.toml) (override with your own `co-scientist.toml`). Any of the providers below works; pick whichever you have a key for. Set `provider` and the per-agent `[models]` to your chosen vendor's model ids:
 
 ```toml
 [llm]
-provider = "anthropic"
+provider = "openai"          # or anthropic / openrouter / gemini / groq / together / mistral / ollama / openai_compatible
+
+[models]
+generation = "gpt-5"         # use whatever model ids your provider exposes
+reflection = "gpt-5"
+# ... (see config/default.toml for the full per-agent list)
 ```
 
 | provider              | Endpoint                                                | Required key            | Example models                                            |
 | --------------------- | ------------------------------------------------------- | ----------------------- | --------------------------------------------------------- |
-| `anthropic` *(default)* | api.anthropic.com                                     | `ANTHROPIC_API_KEY`     | `claude-opus-4-7`, `claude-sonnet-4-6`                    |
 | `openai`              | api.openai.com                                          | `OPENAI_API_KEY`        | `gpt-5`, `gpt-4o`, `o3-mini`                              |
-| `openrouter`          | openrouter.ai — 200+ models from every major vendor     | `OPENROUTER_API_KEY`    | `anthropic/claude-3.5-sonnet`, `openai/gpt-5`, `google/gemini-2.5-pro`, `meta-llama/llama-3.3-70b-instruct` |
+| `anthropic`           | api.anthropic.com                                       | `ANTHROPIC_API_KEY`     | `claude-opus-4-7`, `claude-sonnet-4-6`                    |
+| `openrouter`          | openrouter.ai — 200+ models from every major vendor     | `OPENROUTER_API_KEY`    | `openai/gpt-5`, `google/gemini-2.5-pro`, `anthropic/claude-3.5-sonnet`, `meta-llama/llama-3.3-70b-instruct` |
 | `gemini` / `google`   | generativelanguage.googleapis.com (OpenAI-compat)       | `GEMINI_API_KEY`        | `gemini-2.5-pro`, `gemini-2.5-flash`                      |
 | `groq`                | api.groq.com                                            | `GROQ_API_KEY`          | `llama-3.3-70b-versatile`, `mixtral-8x7b-32768`           |
 | `together`            | api.together.xyz                                        | `TOGETHER_API_KEY`      | `meta-llama/Llama-3.3-70B-Instruct-Turbo`                 |
@@ -159,11 +164,13 @@ referer = "https://your-app.example.com"   # optional, for catalog attribution
 title   = "My Co-Scientist"
 
 [models]
-generation         = "anthropic/claude-3.5-sonnet"
-reflection         = "openai/gpt-5"
+generation         = "openai/gpt-5"
+reflection         = "anthropic/claude-3.5-sonnet"
 ranking_pairwise   = "google/gemini-2.5-flash"
-metareview_final   = "anthropic/claude-opus-4-7"
+metareview_final   = "meta-llama/llama-3.3-70b-instruct"
 ```
+
+Any per-agent model can point at any vendor — the example above just mixes four. Use whatever combination you prefer.
 
 Cost is estimated via `co_scientist/llm/routing.py`'s `PRICE_TABLE`; unknown models match a family-hint (flash / mini / opus / sonnet / gemini / llama / mistral) so brand-new previews price sensibly. Tighten `[run] budget_usd` if running on a new model you haven't sanity-checked.
 
