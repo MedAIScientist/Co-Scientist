@@ -67,6 +67,20 @@ class TerminationCfg(BaseModel):
     elo_stability_n: int = 3
     elo_stability_eps: float = 25.0
     match_snapshot_every: int = 10
+    # Guards that prevent elo_stable from firing on a small pool.
+    # Defaults of 0 preserve the original behaviour.
+    min_ideas_before_stable: int = 0
+    min_matches_before_stable: int = 0
+
+
+class EvolutionCfg(BaseModel):
+    """Controls when the idle-refinement loop triggers evolution."""
+    # Minimum number of *mature* hypotheses (>= 3 matches played) required
+    # before the supervisor schedules an EvolveTopHypotheses task.
+    # Default matches the original hardcoded value.
+    min_mature: int = 20
+    # How many top hypotheses to evolve per idle pass.
+    top_k: int = 5
 
 
 class BudgetSharesCfg(BaseModel):
@@ -258,6 +272,7 @@ class Config(BaseModel):
     vectors: VectorsCfg = Field(default_factory=VectorsCfg)
     ranking: RankingCfg = Field(default_factory=RankingCfg)
     termination: TerminationCfg = Field(default_factory=TerminationCfg)
+    evolution: EvolutionCfg = Field(default_factory=EvolutionCfg)
     budget_shares: BudgetSharesCfg = Field(default_factory=BudgetSharesCfg)
     models: ModelsCfg = Field(default_factory=ModelsCfg)
     thinking: ThinkingCfg = Field(default_factory=ThinkingCfg)

@@ -142,6 +142,8 @@ class Supervisor:
                 k=self.cfg.termination.elo_stability_k,
                 n=self.cfg.termination.elo_stability_n,
                 eps=self.cfg.termination.elo_stability_eps,
+                min_ideas=self.cfg.termination.min_ideas_before_stable,
+                min_matches=self.cfg.termination.min_matches_before_stable,
             )
 
             stop_reason = await self._main_loop(conn, deps, session, tracker)
@@ -445,15 +447,19 @@ class Supervisor:
             ))
             enqueued += 1
 
-        # If the leaderboard has matured (>= 20 hypotheses with ≥ 3 matches), evolve.
+        # If the leaderboard has matured, evolve. The maturity gate and top_k are
+        # config-driven so deep runs can lower the gate to grow the pool faster.
         mature = sum(1 for h in in_tournament if h.matches_played >= 3)
-        if mature >= 20:
+        if mature >= self.cfg.evolution.min_mature:
             await task_repo.enqueue(conn, Task(
                 id=ids.task_id(), session_id=session.id,
                 created_at=datetime.now(UTC),
                 agent="evolution", action="EvolveTopHypotheses",
                 target_id=None,
-                payload={"top_k": 5, "strategies": ["combine", "simplify", "out_of_box"]},
+                payload={
+                    "top_k": self.cfg.evolution.top_k,
+                    "strategies": ["combine", "simplify", "out_of_box"],
+                },
                 priority=140, status="pending",
                 idempotency_key=f"{session.id}::evolution::idle::{anchor_mc}",
             ))

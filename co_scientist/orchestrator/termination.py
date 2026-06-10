@@ -34,15 +34,25 @@ class EloSnapshot:
     match_count: int
     top_ids: tuple[str, ...]
     top_elos: tuple[float, ...]
+    pool_size: int = 0  # total hypotheses in_tournament or pinned at snapshot time
 
 
 class StabilityTracker:
     """Owns the recent EloSnapshot history. One per session."""
 
-    def __init__(self, k: int, n: int, eps: float) -> None:
+    def __init__(
+        self,
+        k: int,
+        n: int,
+        eps: float,
+        min_ideas: int = 0,
+        min_matches: int = 0,
+    ) -> None:
         self.k = k
         self.n = n
         self.eps = eps
+        self.min_ideas = min_ideas
+        self.min_matches = min_matches
         self._history: list[EloSnapshot] = []
 
     def push(self, snap: EloSnapshot) -> None:
@@ -59,6 +69,13 @@ class StabilityTracker:
         if len(self._history) < self.n:
             return False
         recent = self._history[-self.n :]
+        # Guard: do not declare stability until the pool is large enough
+        # and enough matches have been played.  Guards default to 0 (off),
+        # preserving the original behaviour when not configured.
+        if self.min_ideas > 0 and recent[-1].pool_size < self.min_ideas:
+            return False
+        if self.min_matches > 0 and recent[-1].match_count < self.min_matches:
+            return False
         # All N snapshots must have the same top-K id set
         first_set = set(recent[0].top_ids)
         for s in recent[1:]:
@@ -76,7 +93,7 @@ class StabilityTracker:
 async def snapshot_top_k(
     conn: aiosqlite.Connection, session_id: str, k: int
 ) -> EloSnapshot:
-    """Read the current top-K leaderboard + count of completed matches."""
+    """Read the current top-K leaderboard + count of completed matches + pool size."""
     async with conn.execute(
         """SELECT id, elo FROM hypotheses
               WHERE session_id=? AND state IN ('in_tournament','pinned')
@@ -90,10 +107,17 @@ async def snapshot_top_k(
         (session_id,),
     ) as cur:
         mc_row = await cur.fetchone()
+    async with conn.execute(
+        """SELECT COUNT(*) AS n FROM hypotheses
+              WHERE session_id=? AND state IN ('in_tournament','pinned')""",
+        (session_id,),
+    ) as cur:
+        pool_row = await cur.fetchone()
     return EloSnapshot(
         match_count=mc_row["n"] if mc_row else 0,
         top_ids=tuple(r["id"] for r in rows),
         top_elos=tuple(r["elo"] for r in rows),
+        pool_size=pool_row["n"] if pool_row else 0,
     )
 
 
@@ -126,7 +150,7 @@ def should_stop(
         return StopReason.BUDGET
     if wall_clock_exceeded(session):
         return StopReason.WALL_CLOCK
-    _ = cfg
+    del cfg  # reserved for future config-driven termination rules
     if tracker.is_stable():
         return StopReason.ELO_STABLE
     return None

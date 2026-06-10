@@ -45,6 +45,19 @@ elo_stability_k = 5                  # top-K tracked
 elo_stability_n = 3                  # snapshots compared
 elo_stability_eps = 25.0
 match_snapshot_every = 10
+# Guards: elo_stable cannot fire until these thresholds are met.
+# Default 0 = disabled (preserves original behaviour).
+# Deep runs should set min_ideas_before_stable >= max_ideas / 2.
+min_ideas_before_stable = 0
+min_matches_before_stable = 0
+
+[evolution]
+# Minimum number of *mature* hypotheses (>= 3 matches played) before the
+# supervisor schedules an evolution pass.  Lower this for deep runs where
+# the pool size is larger than the default 60-idea session.
+min_mature = 20
+# How many top hypotheses to evolve per idle pass.
+top_k = 5
 
 [budget_shares]
 generation = 0.20
