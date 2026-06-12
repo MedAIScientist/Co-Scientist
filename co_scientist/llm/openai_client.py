@@ -441,7 +441,10 @@ _STOP_REASON_MAP = {
     "stop": "end_turn",
     "tool_calls": "tool_use",
     "function_call": "tool_use",  # legacy
-    "length": "max_completion_tokens",
+    # Values are normalized to Anthropic's stop_reason vocabulary, not the
+    # OpenAI request field name — keep "max_tokens" (see _build_openai_request
+    # which separately sends the "max_completion_tokens" request field).
+    "length": "max_tokens",
     "content_filter": "refusal",
 }
 

@@ -217,7 +217,7 @@ def test_build_request_emits_system_and_user_messages() -> None:
     )
     req = _build_openai_request(spec)
     assert req["model"] == "gpt-5"
-    assert req["max_tokens"] == 512
+    assert req["max_completion_tokens"] == 512
     roles = [m["role"] for m in req["messages"]]
     assert roles == ["system", "user"]
     # cache_control must NOT leak into the OpenAI request
